@@ -75,6 +75,7 @@
       padding: 24px;
       max-width: 1100px;
       margin: 0 auto;
+      -webkit-app-region: no-drag;
     }
 
     /* Tab navigation */
@@ -319,14 +320,16 @@
     /* Matrix view */
     .matrix-container {
       overflow-x: auto;
+      overflow-y: hidden;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 14px;
+      -webkit-app-region: no-drag;
     }
     .matrix-table {
-      width: 100%;
+      width: max-content;
       border-collapse: collapse;
-      min-width: 800px;
+      min-width: max-content;
     }
     .matrix-table th {
       background: #131315;
@@ -349,7 +352,7 @@
       padding: 3px;
       text-align: center;
       border-bottom: 1px solid rgba(255,255,255,0.03);
-      min-width: 40px;
+      min-width: 54px;
     }
     .matrix-table td.row-header {
       text-align: left;
@@ -361,7 +364,7 @@
       border-right: 1px solid var(--border);
     }
     .matrix-cell {
-      width: 30px; height: 26px;
+      width: 42px; height: 28px;
       border-radius: 5px;
       margin: 0 auto;
       border: 1.5px solid transparent;
@@ -401,6 +404,7 @@
       font-size: 10px;
       color: var(--text-dim);
       white-space: nowrap;
+      min-width: 44px;
     }
     .count-cell {
       font-size: 11px;
@@ -529,7 +533,7 @@
   <div class="titlebar">
     <h1>VocalMix</h1>
     <div class="status">
-      <span><span class="status-dot green" id="dliveStatusDot"></span>dLive: <span id="dliveStatusText">Simulated</span></span>
+      <span><span class="status-dot" id="dliveStatusDot"></span>dLive: <span id="dliveStatusText">Disconnected</span></span>
       <span><span class="status-dot green"></span>Server: <span id="serverPort">3000</span></span>
     </div>
   </div>
@@ -551,8 +555,8 @@
       </div>
       <div class="status-card">
         <div class="label"><span class="status-dot green" id="dliveCardDot"></span> dLive</div>
-        <div class="value" id="dliveCardStatus">Simulated</div>
-        <div class="sub" id="dliveCardIP">Dev Mode</div>
+        <div class="value" id="dliveCardStatus">Disconnected</div>
+        <div class="sub" id="dliveCardIP">No MixRack</div>
       </div>
       <div class="status-card">
         <div class="label"><span class="status-dot" style="background:#E8A44A;box-shadow:0 0 6px #E8A44A40"></span> Connected</div>
@@ -561,7 +565,7 @@
       </div>
       <div class="status-card">
         <div class="label"><span class="status-dot" style="background:#4A9EE8;box-shadow:0 0 6px #4A9EE840"></span> Channels</div>
-        <div class="value" id="channelCount">20</div>
+        <div class="value" id="channelCount">0</div>
         <div class="sub">synced from dLive</div>
       </div>
     </div>
@@ -570,8 +574,8 @@
     <div class="sync-banner" id="syncBanner">
       <span class="icon">⟳</span>
       <div>
-        <strong>Channel data loaded from dLive.</strong>
-        <span style="opacity:0.7"> 20 inputs, 12 aux buses synced.</span>
+        <strong id="syncBannerTitle">No live channel data loaded.</strong>
+        <span style="opacity:0.7" id="syncBannerText"> Connect to a MixRack and sync channel names.</span>
       </div>
       <button class="action" onclick="resyncDLive()">Re-sync</button>
     </div>
@@ -613,14 +617,18 @@
             <div class="label">MixRack IP Address</div>
             <div class="desc">The IP of your dLive MixRack on the audio network</div>
           </div>
-          <input class="settings-input" id="dliveIP" value="192.168.1.70" placeholder="192.168.1.70">
+          <input class="settings-input" id="dliveIP" value="" placeholder="192.168.1.70">
         </div>
         <div class="settings-row">
           <div>
             <div class="label">Auto-connect on launch</div>
             <div class="desc">Automatically connect to the dLive when VocalMix starts</div>
           </div>
-          <input type="checkbox" id="autoConnect" checked>
+          <input type="checkbox" id="autoConnect">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="action" onclick="connectDLiveNow()">Connect Now</button>
+          <button class="action" onclick="disconnectDLiveNow()">Disconnect</button>
         </div>
       </div>
       <div class="settings-section">
@@ -655,6 +663,9 @@
             <div class="desc">Ceiling to prevent blasting their ears</div>
           </div>
           <input class="settings-input" id="faderMax" value="6" style="width:80px">
+        </div>
+        <div style="margin-top:14px">
+          <button class="action" onclick="saveSettings()">Save Settings</button>
         </div>
       </div>
     </div>
@@ -710,35 +721,13 @@
     // STATE
     // ═══════════════════════════════════════════════════════════
 
-    // Simulated dLive data (in production, pulled from MixRack)
     const GROUP_COLORS = {
-      vocals: '#E85D4A', keys: '#C77DFF', guitars: '#E8A44A',
+      inputs: '#5F6B7A', vocals: '#E85D4A', keys: '#C77DFF', guitars: '#E8A44A',
       bass: '#4AE88D', drums: '#4A9EE8', utility: '#8B8B8B',
       tracks: '#FF6B9D', fx: '#00D4AA',
     };
 
-    let channels = [
-      { ch: 1, name: 'Lead Vox', color: '#E85D4A', group: 'vocals' },
-      { ch: 2, name: 'BGV 1', color: '#E85D4A', group: 'vocals' },
-      { ch: 3, name: 'BGV 2', color: '#E85D4A', group: 'vocals' },
-      { ch: 4, name: 'BGV 3', color: '#E85D4A', group: 'vocals' },
-      { ch: 5, name: 'Keys L', color: '#C77DFF', group: 'keys' },
-      { ch: 6, name: 'Keys R', color: '#C77DFF', group: 'keys' },
-      { ch: 7, name: 'Ac Gtr', color: '#E8A44A', group: 'guitars' },
-      { ch: 8, name: 'El Gtr', color: '#E8A44A', group: 'guitars' },
-      { ch: 9, name: 'Bass DI', color: '#4AE88D', group: 'bass' },
-      { ch: 10, name: 'Kick', color: '#4A9EE8', group: 'drums' },
-      { ch: 11, name: 'Snare', color: '#4A9EE8', group: 'drums' },
-      { ch: 12, name: 'HH', color: '#4A9EE8', group: 'drums' },
-      { ch: 13, name: 'OH L', color: '#4A9EE8', group: 'drums' },
-      { ch: 14, name: 'OH R', color: '#4A9EE8', group: 'drums' },
-      { ch: 15, name: 'Click', color: '#8B8B8B', group: 'utility' },
-      { ch: 16, name: 'Trk L', color: '#FF6B9D', group: 'tracks' },
-      { ch: 17, name: 'Trk R', color: '#FF6B9D', group: 'tracks' },
-      { ch: 18, name: 'MD Talk', color: '#8B8B8B', group: 'utility' },
-      { ch: 19, name: 'Pastor', color: '#8B8B8B', group: 'utility' },
-      { ch: 20, name: 'Reverb', color: '#00D4AA', group: 'fx' },
-    ];
+    let channels = [];
 
     let auxBuses = [
       { id: 1, name: 'Vox 1', color: '#E85D4A' },
@@ -788,6 +777,115 @@
     let matrixDirty = false;
     let isDragging = false;
     let dragMode = null;
+    let settings = null;
+
+    function getApiBase() {
+      if (location.protocol !== 'file:') return '';
+      return window.vocalmix
+        ? window.vocalmix.getServerState().then(state => `http://localhost:${state.port || 3000}`)
+        : Promise.resolve('http://localhost:3000');
+    }
+
+    async function fetchJSON(path, options) {
+      const base = await getApiBase();
+      const response = await fetch(`${base}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    async function refreshDLiveData() {
+      const status = await fetchJSON('/api/dlive-status');
+      channels = Array.isArray(status.channels) ? status.channels : [];
+      if (Array.isArray(status.auxBuses) && status.auxBuses.length) {
+        auxBuses = status.auxBuses;
+      }
+
+      document.getElementById('dliveStatusText').textContent = status.connected ? 'Connected' : 'Disconnected';
+      document.getElementById('dliveCardStatus').textContent = status.connected ? 'Connected' : 'Disconnected';
+      document.getElementById('dliveCardIP').textContent = status.ip || 'No MixRack';
+      document.getElementById('channelCount').textContent = String(channels.length);
+      document.getElementById('syncBannerTitle').textContent = channels.length
+        ? 'Live channel names loaded from dLive.'
+        : 'No live channel data loaded.';
+      document.getElementById('syncBannerText').textContent = channels.length
+        ? ` ${channels.length} input names synced from the MixRack.`
+        : ' Connect to a MixRack and sync channel names.';
+
+      const dotColor = status.connected ? '#34C759' : '#FF9500';
+      const dotShadow = status.connected ? '#34C75940' : '#FF950040';
+      ['dliveStatusDot', 'dliveCardDot'].forEach((id) => {
+        const el = document.getElementById(id);
+        el.style.background = dotColor;
+        el.style.boxShadow = `0 0 6px ${dotShadow}`;
+      });
+
+      renderProfiles();
+      if (editingProfileId) renderChannelCheckboxes();
+      renderMatrix();
+    }
+
+    async function loadSettings() {
+      settings = await fetchJSON('/api/settings');
+      document.getElementById('dliveIP').value = settings.dliveIP || '';
+      document.getElementById('autoConnect').checked = !!settings.autoConnect;
+      document.getElementById('serverName').value = settings.serverName || 'VocalMix';
+      document.getElementById('serverPortSetting').value = String(settings.port || 3000);
+      document.getElementById('faderMin').value = String(settings.faderMin ?? -60);
+      document.getElementById('faderMax').value = String(settings.faderMax ?? 6);
+    }
+
+    function readSettingsForm() {
+      return {
+        dliveIP: document.getElementById('dliveIP').value.trim(),
+        autoConnect: document.getElementById('autoConnect').checked,
+        serverName: document.getElementById('serverName').value.trim() || 'VocalMix',
+        faderMin: Number(document.getElementById('faderMin').value),
+        faderMax: Number(document.getElementById('faderMax').value),
+      };
+    }
+
+    async function saveSettings() {
+      try {
+        settings = await fetchJSON('/api/settings', {
+          method: 'PUT',
+          body: JSON.stringify(readSettingsForm()),
+        });
+        await loadSettings();
+      } catch (error) {
+        alert(`Failed to save settings: ${error.message}`);
+      }
+    }
+
+    async function connectDLiveNow() {
+      try {
+        const nextSettings = readSettingsForm();
+        await fetchJSON('/api/settings', {
+          method: 'PUT',
+          body: JSON.stringify(nextSettings),
+        });
+        await fetchJSON('/api/dlive/connect', {
+          method: 'POST',
+          body: JSON.stringify({ ip: nextSettings.dliveIP }),
+        });
+        setTimeout(refreshDLiveData, 500);
+      } catch (error) {
+        alert(`Failed to connect to dLive: ${error.message}`);
+      }
+    }
+
+    async function disconnectDLiveNow() {
+      try {
+        await fetchJSON('/api/dlive/disconnect', { method: 'POST', body: '{}' });
+        setTimeout(refreshDLiveData, 100);
+      } catch (error) {
+        alert(`Failed to disconnect dLive: ${error.message}`);
+      }
+    }
 
     // ═══════════════════════════════════════════════════════════
     // TAB SWITCHING
@@ -870,6 +968,10 @@
 
     function renderChannelCheckboxes() {
       const container = document.getElementById('channelCheckboxes');
+      if (!channels.length) {
+        container.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:12px">No live channel names have been received from the MixRack yet.</div>';
+        return;
+      }
       container.innerHTML = channels.map(ch => {
         const on = editChannels.has(ch.ch);
         return `
@@ -938,9 +1040,16 @@
 
     function renderMatrix() {
       const table = document.getElementById('matrixTable');
+      if (!channels.length) {
+        table.innerHTML = '<tbody><tr><td style="padding:20px;color:var(--text-muted);font-size:12px">No live channel names available. Connect to dLive and re-sync.</td></tr></tbody>';
+        return;
+      }
+
+      const matrixChannels = [...channels].sort((a, b) => a.ch - b.ch);
+
       const groups = [];
       let lastGroup = null;
-      channels.forEach(c => {
+      matrixChannels.forEach(c => {
         if (c.group !== lastGroup) {
           groups.push({ group: c.group, count: 0 });
           lastGroup = c.group;
@@ -960,8 +1069,8 @@
 
       // Channel names row
       html += '<tr><th class="row-header"></th>';
-      channels.forEach((ch, i) => {
-        const isFirst = i === 0 || channels[i-1].group !== ch.group;
+      matrixChannels.forEach((ch, i) => {
+        const isFirst = i === 0 || matrixChannels[i-1].group !== ch.group;
         html += `<th style="${isFirst ? 'border-left:1px solid var(--border)' : ''}">
           <div class="ch-number">${ch.ch}</div>
           <div class="ch-name">${ch.name}</div>
@@ -988,10 +1097,10 @@
           </div>
         </td>`;
 
-        channels.forEach((ch, i) => {
+        matrixChannels.forEach((ch, i) => {
           const key = `${p.auxBus}-${ch.ch}`;
           const on = !!matrix[key];
-          const isFirst = i === 0 || channels[i-1].group !== ch.group;
+          const isFirst = i === 0 || matrixChannels[i-1].group !== ch.group;
           html += `<td style="${isFirst ? 'border-left:1px solid var(--border)' : ''}">
             <div class="matrix-cell ${on ? 'on' : ''}"
                  style="--cell-color:${ch.color}"
@@ -1055,16 +1164,31 @@
       alert('Channel access matrix saved.');
     }
 
-    function resyncDLive() {
-      // In production: re-pull channel names from dLive MixRack
-      alert('Re-syncing from dLive...\n\nIn production, this pulls fresh channel names, colors, and aux bus labels from the MixRack.');
+    async function resyncDLive() {
+      try {
+        await fetchJSON('/api/dlive/resync', { method: 'POST', body: '{}' });
+        setTimeout(refreshDLiveData, 500);
+      } catch (error) {
+        alert(`Failed to re-sync dLive: ${error.message}`);
+      }
     }
 
     // ═══════════════════════════════════════════════════════════
     // INIT
     // ═══════════════════════════════════════════════════════════
 
-    renderProfiles();
+    async function initDashboard() {
+      renderProfiles();
+      renderMatrix();
+      try {
+        await loadSettings();
+        await refreshDLiveData();
+      } catch (error) {
+        console.error('Failed to load dLive data:', error);
+      }
+    }
+
+    initDashboard();
   </script>
 </body>
 </html>

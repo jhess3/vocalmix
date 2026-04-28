@@ -1,6 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } = require('electron');
 const path = require('path');
-const { startServer, stopServer, getServerState } = require('./server');
+const { startServer, stopServer, getServerState, setDLiveProvider, loadSettings } = require('./server');
 const { DLiveConnection } = require('./dlive');
 
 let mainWindow = null;
@@ -149,6 +149,27 @@ app.whenReady().then(async () => {
 
   // Initialize dLive connection
   dlive = new DLiveConnection();
+  setDLiveProvider({
+    getStatus: () => ({
+      connected: dlive?.isConnected() || false,
+      ip: dlive?.getIP() || null,
+      channels: dlive?.getChannels() || [],
+      auxBuses: dlive?.getAuxBuses() || [],
+    }),
+    resync: () => dlive.refreshChannelNames(),
+    connect: (ip) => dlive.connect(ip),
+    disconnect: () => {
+      dlive.disconnect();
+      return { success: true };
+    },
+  });
+
+  const settings = loadSettings();
+  if (settings.autoConnect && settings.dliveIP) {
+    dlive.connect(settings.dliveIP).catch((error) => {
+      console.error('[dLive] Auto-connect failed:', error?.error || error?.message || error);
+    });
+  }
 
   // Update tray periodically
   setInterval(updateTray, 5000);

@@ -19,6 +19,15 @@ let serverState = {
   running: false,
   connectedClients: [],
 };
+let dliveProvider = {
+  getStatus: () => ({
+    connected: false,
+    ip: null,
+    channels: [],
+    auxBuses: [],
+  }),
+  resync: async () => ({ success: false, error: 'dLive not configured' }),
+};
 
 // Simple JSON file storage for profiles
 const DATA_DIR = path.join(
@@ -28,6 +37,16 @@ const DATA_DIR = path.join(
 const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 const MATRIX_FILE = path.join(DATA_DIR, 'matrix.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+function getDefaultSettings() {
+  return {
+    dliveIP: '',
+    serverName: 'VocalMix',
+    autoConnect: false,
+    faderMin: -60,
+    faderMax: 6,
+  };
+}
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -51,6 +70,28 @@ function saveJSON(filepath, data) {
   fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
 }
 
+function loadSettings() {
+  const settings = loadJSON(SETTINGS_FILE, getDefaultSettings());
+
+  // Normalize legacy bootstrap defaults so the app does not auto-connect
+  // to a placeholder MixRack address before the user has configured one.
+  if (settings.dliveIP === '192.168.1.70' && settings.autoConnect === true) {
+    return {
+      ...settings,
+      dliveIP: '',
+      autoConnect: false,
+    };
+  }
+
+  return settings;
+}
+
+function saveSettings(settings) {
+  const updated = { ...getDefaultSettings(), ...settings };
+  saveJSON(SETTINGS_FILE, updated);
+  return updated;
+}
+
 // Default profiles for Vox 1-8
 function getDefaultProfiles() {
   return Array.from({ length: 8 }, (_, i) => ({
@@ -64,6 +105,41 @@ function getDefaultProfiles() {
     lastConnected: null,
     presets: [],
   }));
+}
+
+function getAvailableAuxIds() {
+  const status = dliveProvider.getStatus();
+  const auxBuses = Array.isArray(status.auxBuses) ? status.auxBuses : [];
+  return new Set(auxBuses.map((aux) => aux.id));
+}
+
+function validateProfileAuxAssignment(profiles, profileId, nextAuxBus) {
+  if (nextAuxBus == null) {
+    return { valid: false, status: 400, error: 'Aux bus is required' };
+  }
+
+  const availableAuxIds = getAvailableAuxIds();
+  if (availableAuxIds.size > 0 && !availableAuxIds.has(nextAuxBus)) {
+    return { valid: false, status: 400, error: 'Aux bus is not available from dLive' };
+  }
+
+  const conflict = profiles.find((profile) => profile.id !== profileId && profile.auxBus === nextAuxBus);
+  if (conflict) {
+    return {
+      valid: false,
+      status: 409,
+      error: `Aux ${nextAuxBus} is already assigned to ${conflict.name || conflict.slot}`,
+    };
+  }
+
+  return { valid: true };
+}
+
+function setDLiveProvider(provider) {
+  dliveProvider = {
+    ...dliveProvider,
+    ...provider,
+  };
 }
 
 function startServer(port = 3000) {
@@ -90,6 +166,43 @@ function startServer(port = 3000) {
     });
   });
 
+  app.get('/api/dlive-status', (req, res) => {
+    res.json(dliveProvider.getStatus());
+  });
+
+  app.get('/api/channels', (req, res) => {
+    const status = dliveProvider.getStatus();
+    res.json(status.channels || []);
+  });
+
+  app.post('/api/dlive/resync', async (req, res) => {
+    try {
+      const result = await dliveProvider.resync();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/dlive/connect', async (req, res) => {
+    try {
+      const { ip } = req.body || {};
+      const result = await dliveProvider.connect(ip);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/dlive/disconnect', async (req, res) => {
+    try {
+      const result = await dliveProvider.disconnect();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Get all profiles
   app.get('/api/profiles', (req, res) => {
     const profiles = loadJSON(PROFILES_FILE, getDefaultProfiles());
@@ -103,7 +216,13 @@ function startServer(port = 3000) {
     const idx = profiles.findIndex(p => p.id === id);
     if (idx === -1) return res.status(404).json({ error: 'Profile not found' });
 
-    profiles[idx] = { ...profiles[idx], ...req.body, id };
+    const nextAuxBus = Number(req.body.auxBus);
+    const validation = validateProfileAuxAssignment(profiles, id, nextAuxBus);
+    if (!validation.valid) {
+      return res.status(validation.status).json({ error: validation.error });
+    }
+
+    profiles[idx] = { ...profiles[idx], ...req.body, id, auxBus: nextAuxBus };
     saveJSON(PROFILES_FILE, profiles);
     res.json(profiles[idx]);
   });
@@ -122,21 +241,13 @@ function startServer(port = 3000) {
 
   // Get settings (dLive IP, network config, etc.)
   app.get('/api/settings', (req, res) => {
-    const settings = loadJSON(SETTINGS_FILE, {
-      dliveIP: '192.168.1.70',
-      serverName: 'VocalMix',
-      autoConnect: true,
-      faderMin: -60,  // dB floor for vocalists
-      faderMax: 6,    // dB ceiling for vocalists
-    });
+    const settings = loadSettings();
     res.json(settings);
   });
 
   // Update settings
   app.put('/api/settings', (req, res) => {
-    const settings = loadJSON(SETTINGS_FILE, {});
-    const updated = { ...settings, ...req.body };
-    saveJSON(SETTINGS_FILE, updated);
+    const updated = saveSettings(req.body);
     res.json(updated);
   });
 
@@ -255,4 +366,12 @@ function getServerState() {
   return { ...serverState };
 }
 
-module.exports = { startServer, stopServer, getServerState };
+module.exports = {
+  startServer,
+  stopServer,
+  getServerState,
+  setDLiveProvider,
+  loadSettings,
+  saveSettings,
+  getDefaultSettings,
+};

@@ -24,6 +24,10 @@ const DLIVE_PORT = 51325;
 // Input channels: MIDI ch 0-11 (banks of 12)
 // Mix/Aux outputs: MIDI ch 12-15 (banks)
 const MIDI_BANK_SIZE = 12;
+const INPUT_CHANNEL_COUNT = 128;
+const INPUT_MIDI_BASE_CHANNEL = 0;
+const SYSEX_HEADER = [0xF0, 0x00, 0x00, 0x1A, 0x50, 0x10, 0x01, 0x00];
+const DEFAULT_CHANNEL_COLOR = '#5F6B7A';
 
 class DLiveConnection extends EventEmitter {
   constructor() {
@@ -35,6 +39,7 @@ class DLiveConnection extends EventEmitter {
     this._auxBuses = [];
     this._reconnectTimer = null;
     this._buffer = Buffer.alloc(0);
+    this._receivedChannelNames = new Map();
   }
 
   isConnected() {
@@ -51,6 +56,15 @@ class DLiveConnection extends EventEmitter {
 
   getAuxBuses() {
     return this._auxBuses;
+  }
+
+  async refreshChannelNames() {
+    if (!this._connected || !this._socket) {
+      return { success: false, error: 'Not connected' };
+    }
+
+    this._requestShowData();
+    return { success: true };
   }
 
   /**
@@ -86,7 +100,9 @@ class DLiveConnection extends EventEmitter {
       this._socket.on('error', (err) => {
         console.error(`[dLive] Connection error:`, err.message);
         this._connected = false;
-        this.emit('error', err);
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', err);
+        }
         reject({ success: false, error: err.message });
       });
 
@@ -128,46 +144,8 @@ class DLiveConnection extends EventEmitter {
    * SysEx/NRPN messages based on protocol documentation or analysis.
    */
   _requestShowData() {
-    // Request input channel names (channels 1-128)
-    // Request mix/aux bus names
-    // Request current routing state
-    // Request fader levels for all sends
-
-    // For now, emit simulated data for development.
-    // In production, this would parse actual dLive responses.
-    setTimeout(() => {
-      this._simulateShowData();
-    }, 500);
-  }
-
-  /**
-   * Simulated show data for development without a real dLive.
-   * Replace this with actual protocol parsing.
-   */
-  _simulateShowData() {
-    this._channels = [
-      { ch: 1, name: 'Lead Vox', color: '#E85D4A', group: 'vocals', stereoLinked: false },
-      { ch: 2, name: 'BGV 1', color: '#E85D4A', group: 'vocals', stereoLinked: false },
-      { ch: 3, name: 'BGV 2', color: '#E85D4A', group: 'vocals', stereoLinked: false },
-      { ch: 4, name: 'BGV 3', color: '#E85D4A', group: 'vocals', stereoLinked: false },
-      { ch: 5, name: 'Keys L', color: '#C77DFF', group: 'keys', stereoLinked: true },
-      { ch: 6, name: 'Keys R', color: '#C77DFF', group: 'keys', stereoLinked: true },
-      { ch: 7, name: 'Ac Gtr', color: '#E8A44A', group: 'guitars', stereoLinked: false },
-      { ch: 8, name: 'El Gtr', color: '#E8A44A', group: 'guitars', stereoLinked: false },
-      { ch: 9, name: 'Bass DI', color: '#4AE88D', group: 'bass', stereoLinked: false },
-      { ch: 10, name: 'Kick', color: '#4A9EE8', group: 'drums', stereoLinked: false },
-      { ch: 11, name: 'Snare', color: '#4A9EE8', group: 'drums', stereoLinked: false },
-      { ch: 12, name: 'HH', color: '#4A9EE8', group: 'drums', stereoLinked: false },
-      { ch: 13, name: 'OH L', color: '#4A9EE8', group: 'drums', stereoLinked: true },
-      { ch: 14, name: 'OH R', color: '#4A9EE8', group: 'drums', stereoLinked: true },
-      { ch: 15, name: 'Click', color: '#8B8B8B', group: 'utility', stereoLinked: false },
-      { ch: 16, name: 'Trk L', color: '#FF6B9D', group: 'tracks', stereoLinked: true },
-      { ch: 17, name: 'Trk R', color: '#FF6B9D', group: 'tracks', stereoLinked: true },
-      { ch: 18, name: 'MD Talk', color: '#8B8B8B', group: 'utility', stereoLinked: false },
-      { ch: 19, name: 'Pastor', color: '#8B8B8B', group: 'utility', stereoLinked: false },
-      { ch: 20, name: 'Reverb', color: '#00D4AA', group: 'fx', stereoLinked: false },
-    ];
-
+    this._channels = [];
+    this._receivedChannelNames.clear();
     this._auxBuses = [
       { id: 1, name: 'Vox 1', color: '#E85D4A' },
       { id: 2, name: 'Vox 2', color: '#E8A44A' },
@@ -188,7 +166,31 @@ class DLiveConnection extends EventEmitter {
       auxBuses: this._auxBuses,
     });
 
-    console.log(`[dLive] Loaded ${this._channels.length} channels, ${this._auxBuses.length} aux buses`);
+    const messages = [];
+    for (let channelIndex = 0; channelIndex < INPUT_CHANNEL_COUNT; channelIndex += 1) {
+      messages.push(this._buildGetChannelNameMessage(INPUT_MIDI_BASE_CHANNEL, channelIndex));
+    }
+
+    this._socket.write(Buffer.concat(messages));
+  }
+
+  _buildGetChannelNameMessage(baseChannel, channelIndex) {
+    return Buffer.from([
+      ...SYSEX_HEADER,
+      baseChannel & 0x0F,
+      0x01,
+      channelIndex & 0x7F,
+      0xF7,
+    ]);
+  }
+
+  _emitShowData() {
+    this.emit('show-data', {
+      channels: this._channels,
+      auxBuses: this._auxBuses,
+    });
+
+    console.log(`[dLive] Loaded ${this._channels.length} live channel names, ${this._auxBuses.length} aux buses`);
   }
 
   /**
@@ -196,15 +198,57 @@ class DLiveConnection extends EventEmitter {
    * The dLive protocol uses variable-length messages.
    */
   _parseMessages() {
-    // Protocol parsing would go here.
-    // Messages include:
-    //   - Channel name updates
-    //   - Fader level changes (from surface or other clients)
-    //   - Mute state changes
-    //   - Scene recall notifications
+    while (this._buffer.length > 0) {
+      const start = this._buffer.indexOf(0xF0);
+      if (start === -1) {
+        this._buffer = Buffer.alloc(0);
+        return;
+      }
 
-    // For now, clear the buffer
-    this._buffer = Buffer.alloc(0);
+      if (start > 0) {
+        this._buffer = this._buffer.slice(start);
+      }
+
+      const end = this._buffer.indexOf(0xF7, 1);
+      if (end === -1) {
+        return;
+      }
+
+      const message = this._buffer.slice(0, end + 1);
+      this._buffer = this._buffer.slice(end + 1);
+      this._parseSysExMessage(message);
+    }
+  }
+
+  _parseSysExMessage(message) {
+    if (message.length < 12) return;
+
+    const header = message.subarray(0, SYSEX_HEADER.length);
+    if (!header.equals(Buffer.from(SYSEX_HEADER))) return;
+
+    const command = message[9];
+    if (command !== 0x02) return;
+
+    const channelIndex = message[10];
+    const channelNumber = channelIndex + 1;
+    const name = message
+      .subarray(11, message.length - 1)
+      .toString('ascii')
+      .replace(/[^\x20-\x7E]/g, '')
+      .trimEnd();
+
+    this._receivedChannelNames.set(channelNumber, name);
+    this._channels = Array.from(this._receivedChannelNames.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([ch, channelName]) => ({
+        ch,
+        name: channelName,
+        color: DEFAULT_CHANNEL_COLOR,
+        group: 'inputs',
+        stereoLinked: false,
+      }));
+
+    this._emitShowData();
   }
 
   /**

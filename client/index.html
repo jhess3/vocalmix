@@ -324,48 +324,19 @@
     let savedLevels = {};
     let activeTouches = {};  // { touchId: { ch, startY, startLevel } }
 
-    // Simulated channel data (from dLive via server)
-    const channels = [
-      { ch: 1, name: 'Lead Vox', color: '#E85D4A', group: 'vocals' },
-      { ch: 2, name: 'BGV 1', color: '#E85D4A', group: 'vocals' },
-      { ch: 3, name: 'BGV 2', color: '#E85D4A', group: 'vocals' },
-      { ch: 4, name: 'BGV 3', color: '#E85D4A', group: 'vocals' },
-      { ch: 5, name: 'Keys L', color: '#C77DFF', group: 'keys' },
-      { ch: 6, name: 'Keys R', color: '#C77DFF', group: 'keys' },
-      { ch: 7, name: 'Ac Gtr', color: '#E8A44A', group: 'guitars' },
-      { ch: 8, name: 'El Gtr', color: '#E8A44A', group: 'guitars' },
-      { ch: 9, name: 'Bass DI', color: '#4AE88D', group: 'bass' },
-      { ch: 10, name: 'Kick', color: '#4A9EE8', group: 'drums' },
-      { ch: 11, name: 'Snare', color: '#4A9EE8', group: 'drums' },
-      { ch: 12, name: 'HH', color: '#4A9EE8', group: 'drums' },
-      { ch: 13, name: 'OH L', color: '#4A9EE8', group: 'drums' },
-      { ch: 14, name: 'OH R', color: '#4A9EE8', group: 'drums' },
-      { ch: 15, name: 'Click', color: '#8B8B8B', group: 'utility' },
-      { ch: 16, name: 'Trk L', color: '#FF6B9D', group: 'tracks' },
-      { ch: 17, name: 'Trk R', color: '#FF6B9D', group: 'tracks' },
-      { ch: 18, name: 'MD Talk', color: '#8B8B8B', group: 'utility' },
-      { ch: 19, name: 'Pastor', color: '#8B8B8B', group: 'utility' },
-      { ch: 20, name: 'Reverb', color: '#00D4AA', group: 'fx' },
-    ];
+    let channels = [];
+    let profiles = [];
 
-    // Simulated profiles (from server)
-    const profiles = [
-      { id: 1, slot: 'Vox 1', name: 'Sarah M.', auxBus: 1, color: '#E85D4A' },
-      { id: 2, slot: 'Vox 2', name: 'James K.', auxBus: 2, color: '#E8A44A' },
-      { id: 3, slot: 'Vox 3', name: 'Maria L.', auxBus: 3, color: '#4AE88D' },
-      { id: 4, slot: 'Vox 4', name: 'David R.', auxBus: 4, color: '#4A9EE8' },
-      { id: 5, slot: 'Vox 5', name: '', auxBus: 5, color: '#C77DFF' },
-      { id: 6, slot: 'Vox 6', name: '', auxBus: 6, color: '#FF6B9D' },
-      { id: 7, slot: 'Vox 7', name: '', auxBus: 7, color: '#00D4AA' },
-      { id: 8, slot: 'Vox 8', name: '', auxBus: 8, color: '#8B8B8B' },
-    ];
-
-    const allowedPerProfile = {
-      1: [1,2,3,4,5,6,15,16,17,18],
-      2: [1,2,3,4,5,6,7,15,16,17,18],
-      3: [1,2,3,4,5,6,15,16,17,18,20],
-      4: [1,5,6,9,15,16,17],
-    };
+    async function fetchJSON(path, options) {
+      const response = await fetch(path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+      }
+      return response.json();
+    }
 
     // ═══════════════════════════════════════════════════════════
     // LOGIN
@@ -387,30 +358,39 @@
       }).join('');
     }
 
-    function login(profileId) {
-      currentProfile = profiles.find(p => p.id === profileId);
-      if (!currentProfile) return;
+    async function login(profileId) {
+      try {
+        channels = await fetchJSON('/api/channels');
+        const data = await fetchJSON('/api/login', {
+          method: 'POST',
+          body: JSON.stringify({ profileId }),
+        });
 
-      // In production: POST to /api/login
-      allowedChannels = allowedPerProfile[profileId] || [];
-      savedLevels = {};
+        currentProfile = data.profile;
+        if (!currentProfile) return;
 
-      // Default levels at ~70%
-      allowedChannels.forEach(ch => {
-        faderLevels[ch] = savedLevels[ch] || 0.7;
-      });
+        allowedChannels = data.allowedChannels || [];
+        savedLevels = data.savedLevels || {};
+        faderLevels = {};
 
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('mixerScreen').style.display = 'flex';
+        allowedChannels.forEach(ch => {
+          faderLevels[ch] = savedLevels[ch] || 0.7;
+        });
 
-      document.getElementById('mixerAvatar').textContent = currentProfile.id;
-      document.getElementById('mixerAvatar').style.background =
-        `linear-gradient(135deg,${currentProfile.color},${currentProfile.color}99)`;
-      document.getElementById('mixerName').textContent = currentProfile.name;
-      document.getElementById('mixerAux').textContent =
-        `Aux ${currentProfile.auxBus} · ${currentProfile.slot}`;
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mixerScreen').style.display = 'flex';
 
-      renderFaders();
+        document.getElementById('mixerAvatar').textContent = currentProfile.id;
+        document.getElementById('mixerAvatar').style.background =
+          `linear-gradient(135deg,${currentProfile.color},${currentProfile.color}99)`;
+        document.getElementById('mixerName').textContent = currentProfile.name;
+        document.getElementById('mixerAux').textContent =
+          `Aux ${currentProfile.auxBus} · ${currentProfile.slot}`;
+
+        renderFaders();
+      } catch (error) {
+        console.error('Login failed:', error);
+      }
     }
 
     function logout() {
@@ -434,6 +414,11 @@
     function renderFaders() {
       const area = document.getElementById('faderArea');
       const visibleChannels = channels.filter(c => allowedChannels.includes(c.ch));
+
+      if (!visibleChannels.length) {
+        area.innerHTML = '<div style="padding:24px;color:rgba(255,255,255,0.45);font-size:14px">No live dLive channel names are available for this profile.</div>';
+        return;
+      }
 
       area.innerHTML = visibleChannels.map(ch => {
         const level = faderLevels[ch.ch] || 0;
@@ -570,7 +555,10 @@
 
     function saveMix() {
       savedLevels = { ...faderLevels };
-      // In production: POST to /api/save-levels
+      fetchJSON('/api/save-levels', {
+        method: 'POST',
+        body: JSON.stringify({ profileId: currentProfile.id, levels: savedLevels }),
+      }).catch((error) => console.error('Save failed:', error));
       // Flash feedback
       const btn = document.querySelector('.save-btn');
       btn.textContent = '✓ Saved!';
@@ -589,7 +577,19 @@
     // ═══════════════════════════════════════════════════════════
     // INIT
     // ═══════════════════════════════════════════════════════════
-    renderLogin();
+    async function initClient() {
+      try {
+        [profiles, channels] = await Promise.all([
+          fetchJSON('/api/profiles'),
+          fetchJSON('/api/channels'),
+        ]);
+      } catch (error) {
+        console.error('Failed to load initial data:', error);
+      }
+      renderLogin();
+    }
+
+    initClient();
   </script>
 </body>
 </html>
