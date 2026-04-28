@@ -26,8 +26,14 @@ const DLIVE_PORT = 51325;
 const MIDI_BANK_SIZE = 12;
 const INPUT_CHANNEL_COUNT = 128;
 const INPUT_MIDI_BASE_CHANNEL = 0;
+const MONO_AUX_MIDI_CHANNEL = INPUT_MIDI_BASE_CHANNEL + 2;
+const MONO_AUX_START_NOTE = 0x00;
+const MAX_MONO_AUX_COUNT = 62;
+const STEREO_AUX_START_NOTE = 0x40;
+const MAX_STEREO_AUX_COUNT = 31;
 const SYSEX_HEADER = [0xF0, 0x00, 0x00, 0x1A, 0x50, 0x10, 0x01, 0x00];
 const DEFAULT_CHANNEL_COLOR = '#5F6B7A';
+const DEFAULT_AUX_COLOR = '#8B8B8B';
 
 class DLiveConnection extends EventEmitter {
   constructor() {
@@ -40,6 +46,8 @@ class DLiveConnection extends EventEmitter {
     this._reconnectTimer = null;
     this._buffer = Buffer.alloc(0);
     this._receivedChannelNames = new Map();
+    this._receivedAuxNames = new Map();
+    this._pendingSendLevelRequests = new Map();
   }
 
   isConnected() {
@@ -65,6 +73,47 @@ class DLiveConnection extends EventEmitter {
 
     this._requestShowData();
     return { success: true };
+  }
+
+  async getAuxSendLevels(inputChannels, auxBus) {
+    if (!this._connected || !this._socket) {
+      return { success: false, error: 'Not connected' };
+    }
+
+    const target = this._getAuxTarget(auxBus);
+    if (!target) {
+      return { success: false, error: `Unsupported aux bus: ${auxBus}` };
+    }
+
+    const requestedChannels = [...new Set(inputChannels)]
+      .map((channel) => Number(channel))
+      .filter((channel) => Number.isInteger(channel) && channel >= 1 && channel <= INPUT_CHANNEL_COUNT);
+
+    const requests = requestedChannels.map((inputCh) => {
+      const promise = this._createPendingSendLevelRequest(inputCh, auxBus);
+      return {
+        inputCh,
+        promise,
+        message: this._buildGetAuxSendLevelMessage(inputCh, target),
+      };
+    });
+
+    if (!requests.length) {
+      return { success: true, levels: {} };
+    }
+
+    this._socket.write(Buffer.concat(requests.map((request) => request.message)));
+
+    const results = await Promise.allSettled(requests.map((request) => request.promise));
+    const levels = {};
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        levels[requests[index].inputCh] = result.value;
+      }
+    });
+
+    return { success: true, levels };
   }
 
   /**
@@ -146,20 +195,8 @@ class DLiveConnection extends EventEmitter {
   _requestShowData() {
     this._channels = [];
     this._receivedChannelNames.clear();
-    this._auxBuses = [
-      { id: 1, name: 'Vox 1', color: '#E85D4A' },
-      { id: 2, name: 'Vox 2', color: '#E8A44A' },
-      { id: 3, name: 'Vox 3', color: '#4AE88D' },
-      { id: 4, name: 'Vox 4', color: '#4A9EE8' },
-      { id: 5, name: 'Vox 5', color: '#C77DFF' },
-      { id: 6, name: 'Vox 6', color: '#FF6B9D' },
-      { id: 7, name: 'Vox 7', color: '#00D4AA' },
-      { id: 8, name: 'Vox 8', color: '#E8A44A' },
-      { id: 9, name: 'IEM MD', color: '#8B8B8B' },
-      { id: 10, name: 'IEM Keys', color: '#C77DFF' },
-      { id: 11, name: 'Wedge DS', color: '#4A9EE8' },
-      { id: 12, name: 'Wedge DR', color: '#4A9EE8' },
-    ];
+    this._receivedAuxNames.clear();
+    this._auxBuses = [];
 
     this.emit('show-data', {
       channels: this._channels,
@@ -170,18 +207,106 @@ class DLiveConnection extends EventEmitter {
     for (let channelIndex = 0; channelIndex < INPUT_CHANNEL_COUNT; channelIndex += 1) {
       messages.push(this._buildGetChannelNameMessage(INPUT_MIDI_BASE_CHANNEL, channelIndex));
     }
+    for (let auxIndex = 0; auxIndex < MAX_MONO_AUX_COUNT; auxIndex += 1) {
+      messages.push(this._buildGetChannelNameMessage(MONO_AUX_MIDI_CHANNEL, MONO_AUX_START_NOTE + auxIndex));
+    }
+    for (let auxIndex = 0; auxIndex < MAX_STEREO_AUX_COUNT; auxIndex += 1) {
+      messages.push(this._buildGetChannelNameMessage(MONO_AUX_MIDI_CHANNEL, STEREO_AUX_START_NOTE + auxIndex));
+    }
 
     this._socket.write(Buffer.concat(messages));
   }
 
-  _buildGetChannelNameMessage(baseChannel, channelIndex) {
+  _buildGetChannelNameMessage(baseChannel, channelNote) {
     return Buffer.from([
       ...SYSEX_HEADER,
       baseChannel & 0x0F,
       0x01,
-      channelIndex & 0x7F,
+      channelNote & 0x7F,
       0xF7,
     ]);
+  }
+
+  _buildGetAuxSendLevelMessage(inputCh, target) {
+    return Buffer.from([
+      ...SYSEX_HEADER,
+      INPUT_MIDI_BASE_CHANNEL & 0x0F,
+      0x05,
+      0x0F,
+      0x0D,
+      (inputCh - 1) & 0x7F,
+      target.sndN & 0x0F,
+      target.sndCH & 0x7F,
+      0xF7,
+    ]);
+  }
+
+  _createPendingSendLevelRequest(inputCh, auxBus) {
+    const key = `${auxBus}:${inputCh}`;
+    const existing = this._pendingSendLevelRequests.get(key);
+    if (existing) {
+      clearTimeout(existing.timeoutId);
+      existing.reject(new Error('Superseded by newer send level request'));
+      this._pendingSendLevelRequests.delete(key);
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        this._pendingSendLevelRequests.delete(key);
+        reject(new Error(`Timed out waiting for send level ${key}`));
+      }, 1500);
+
+      this._pendingSendLevelRequests.set(key, {
+        resolve,
+        reject,
+        timeoutId,
+      });
+    });
+  }
+
+  _getAuxTarget(auxBus) {
+    const normalizedId = Number(auxBus);
+    const discoveredAux = this._auxBuses.find((bus) => bus.id === normalizedId);
+    if (discoveredAux) {
+      return {
+        sndN: MONO_AUX_MIDI_CHANNEL,
+        sndCH: discoveredAux.targetNote,
+      };
+    }
+
+    if (!Number.isInteger(normalizedId)) {
+      return null;
+    }
+
+    if (normalizedId >= 1 && normalizedId <= MAX_MONO_AUX_COUNT) {
+      return {
+        sndN: MONO_AUX_MIDI_CHANNEL,
+        sndCH: normalizedId - 1,
+      };
+    }
+
+    if (
+      normalizedId >= STEREO_AUX_START_NOTE + 1 &&
+      normalizedId < STEREO_AUX_START_NOTE + 1 + MAX_STEREO_AUX_COUNT
+    ) {
+      return {
+        sndN: MONO_AUX_MIDI_CHANNEL,
+        sndCH: normalizedId - 1,
+      };
+    }
+
+    return null;
+  }
+
+  _getAuxBusFromTarget(sndN, sndCH) {
+    if (sndN !== MONO_AUX_MIDI_CHANNEL) return null;
+    if (sndCH >= MONO_AUX_START_NOTE && sndCH < MONO_AUX_START_NOTE + MAX_MONO_AUX_COUNT) {
+      return sndCH + 1;
+    }
+    if (sndCH >= STEREO_AUX_START_NOTE && sndCH < STEREO_AUX_START_NOTE + MAX_STEREO_AUX_COUNT) {
+      return sndCH + 1;
+    }
+    return null;
   }
 
   _emitShowData() {
@@ -226,29 +351,83 @@ class DLiveConnection extends EventEmitter {
     const header = message.subarray(0, SYSEX_HEADER.length);
     if (!header.equals(Buffer.from(SYSEX_HEADER))) return;
 
+    const midiChannel = message[8] & 0x0F;
     const command = message[9];
-    if (command !== 0x02) return;
+    if (command === 0x02) {
+      const name = message
+        .subarray(11, message.length - 1)
+        .toString('ascii')
+        .replace(/[^\x20-\x7E]/g, '')
+        .trimEnd();
 
-    const channelIndex = message[10];
-    const channelNumber = channelIndex + 1;
-    const name = message
-      .subarray(11, message.length - 1)
-      .toString('ascii')
-      .replace(/[^\x20-\x7E]/g, '')
-      .trimEnd();
+      if (midiChannel === INPUT_MIDI_BASE_CHANNEL) {
+        const channelIndex = message[10];
+        const channelNumber = channelIndex + 1;
+        this._receivedChannelNames.set(channelNumber, name);
+        this._channels = Array.from(this._receivedChannelNames.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([ch, channelName]) => ({
+            ch,
+            name: channelName,
+            color: DEFAULT_CHANNEL_COLOR,
+            group: 'inputs',
+            stereoLinked: false,
+          }));
+      } else if (midiChannel === MONO_AUX_MIDI_CHANNEL) {
+        const auxNote = message[10] & 0x7F;
+        const auxBus = this._parseAuxBusFromNote(auxNote, name);
+        if (!auxBus) return;
+        this._receivedAuxNames.set(auxBus.id, auxBus);
+        this._auxBuses = Array.from(this._receivedAuxNames.entries())
+          .sort((a, b) => a[1].targetNote - b[1].targetNote)
+          .map(([, bus]) => bus);
+      }
 
-    this._receivedChannelNames.set(channelNumber, name);
-    this._channels = Array.from(this._receivedChannelNames.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([ch, channelName]) => ({
-        ch,
-        name: channelName,
-        color: DEFAULT_CHANNEL_COLOR,
-        group: 'inputs',
-        stereoLinked: false,
-      }));
+      this._emitShowData();
+      return;
+    }
 
-    this._emitShowData();
+    if (command === 0x0D && message.length >= 15) {
+      const inputCh = (message[10] & 0x7F) + 1;
+      const auxBus = this._getAuxBusFromTarget(message[11] & 0x0F, message[12] & 0x7F);
+      if (!auxBus) return;
+
+      const key = `${auxBus}:${inputCh}`;
+      const pending = this._pendingSendLevelRequests.get(key);
+      if (!pending) return;
+
+      clearTimeout(pending.timeoutId);
+      this._pendingSendLevelRequests.delete(key);
+      pending.resolve((message[13] & 0x7F) / 127);
+    }
+  }
+
+  _parseAuxBusFromNote(auxNote, name) {
+    if (auxNote >= MONO_AUX_START_NOTE && auxNote < MONO_AUX_START_NOTE + MAX_MONO_AUX_COUNT) {
+      const number = auxNote - MONO_AUX_START_NOTE + 1;
+      return {
+        id: number,
+        name: name || `Aux ${number}`,
+        color: DEFAULT_AUX_COLOR,
+        type: 'mono',
+        number,
+        targetNote: auxNote,
+      };
+    }
+
+    if (auxNote >= STEREO_AUX_START_NOTE && auxNote < STEREO_AUX_START_NOTE + MAX_STEREO_AUX_COUNT) {
+      const number = auxNote - STEREO_AUX_START_NOTE + 1;
+      return {
+        id: auxNote + 1,
+        name: name || `Stereo Aux ${number}`,
+        color: DEFAULT_AUX_COLOR,
+        type: 'stereo',
+        number,
+        targetNote: auxNote,
+      };
+    }
+
+    return null;
   }
 
   /**

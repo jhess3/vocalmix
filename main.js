@@ -157,6 +157,7 @@ app.whenReady().then(async () => {
       auxBuses: dlive?.getAuxBuses() || [],
     }),
     resync: () => dlive.refreshChannelNames(),
+    getAuxSendLevels: (inputChannels, auxBus) => dlive.getAuxSendLevels(inputChannels, auxBus),
     connect: (ip) => dlive.connect(ip),
     disconnect: () => {
       dlive.disconnect();

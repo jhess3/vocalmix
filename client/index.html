@@ -326,6 +326,7 @@
 
     let channels = [];
     let profiles = [];
+    let auxBuses = [];
 
     async function fetchJSON(path, options) {
       const response = await fetch(path, {
@@ -338,6 +339,12 @@
       return response.json();
     }
 
+    function getAuxLabel(auxId) {
+      const aux = auxBuses.find((item) => item.id === auxId);
+      if (!aux) return `Aux ${auxId}`;
+      return aux.name;
+    }
+
     // ═══════════════════════════════════════════════════════════
     // LOGIN
     // ═══════════════════════════════════════════════════════════
@@ -345,14 +352,12 @@
     function renderLogin() {
       const grid = document.getElementById('loginGrid');
       grid.innerHTML = profiles.map(p => {
-        if (!p.name) {
-          return `<div class="login-btn empty"><span class="num">—</span></div>`;
-        }
+        const label = p.name || p.slot;
         return `
           <div class="login-btn" style="background:linear-gradient(145deg,${p.color}25,${p.color}10);border-color:${p.color}40"
                onclick="login(${p.id})">
             <span class="num" style="color:${p.color}">${p.id}</span>
-            <span class="name">${p.name}</span>
+            <span class="name">${label}</span>
           </div>
         `;
       }).join('');
@@ -373,7 +378,27 @@
         savedLevels = data.savedLevels || {};
         faderLevels = {};
 
+        let liveLevels = {};
+        if (allowedChannels.length) {
+          try {
+            const liveResponse = await fetchJSON('/api/dlive/send-levels', {
+              method: 'POST',
+              body: JSON.stringify({
+                auxBus: currentProfile.auxBus,
+                inputChannels: allowedChannels,
+              }),
+            });
+            liveLevels = liveResponse.levels || {};
+          } catch (error) {
+            console.error('Failed to load live send levels:', error);
+          }
+        }
+
         allowedChannels.forEach(ch => {
+          if (Object.prototype.hasOwnProperty.call(liveLevels, ch)) {
+            faderLevels[ch] = liveLevels[ch];
+            return;
+          }
           faderLevels[ch] = savedLevels[ch] || 0.7;
         });
 
@@ -383,9 +408,9 @@
         document.getElementById('mixerAvatar').textContent = currentProfile.id;
         document.getElementById('mixerAvatar').style.background =
           `linear-gradient(135deg,${currentProfile.color},${currentProfile.color}99)`;
-        document.getElementById('mixerName').textContent = currentProfile.name;
+        document.getElementById('mixerName').textContent = currentProfile.name || currentProfile.slot;
         document.getElementById('mixerAux').textContent =
-          `Aux ${currentProfile.auxBus} · ${currentProfile.slot}`;
+          `${getAuxLabel(currentProfile.auxBus)} · ${currentProfile.slot}`;
 
         renderFaders();
       } catch (error) {
@@ -579,10 +604,14 @@
     // ═══════════════════════════════════════════════════════════
     async function initClient() {
       try {
-        [profiles, channels] = await Promise.all([
+        const [loadedProfiles, loadedChannels, dliveStatus] = await Promise.all([
           fetchJSON('/api/profiles'),
           fetchJSON('/api/channels'),
+          fetchJSON('/api/dlive-status'),
         ]);
+        profiles = loadedProfiles;
+        channels = loadedChannels;
+        auxBuses = Array.isArray(dliveStatus.auxBuses) ? dliveStatus.auxBuses : [];
       } catch (error) {
         console.error('Failed to load initial data:', error);
       }

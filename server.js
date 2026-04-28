@@ -27,6 +27,7 @@ let dliveProvider = {
     auxBuses: [],
   }),
   resync: async () => ({ success: false, error: 'dLive not configured' }),
+  getAuxSendLevels: async () => ({ success: false, error: 'dLive not configured', levels: {} }),
 };
 
 // Simple JSON file storage for profiles
@@ -200,6 +201,19 @@ function startServer(port = 3000) {
       res.json(result);
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/dlive/send-levels', async (req, res) => {
+    try {
+      const { auxBus, inputChannels } = req.body || {};
+      const result = await dliveProvider.getAuxSendLevels(inputChannels || [], auxBus);
+      if (result.success === false) {
+        return res.status(503).json(result);
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message, levels: {} });
     }
   });
 

@@ -279,7 +279,9 @@
       margin-bottom: 18px;
     }
     .aux-btn {
-      width: 40px; height: 36px;
+      min-width: 72px;
+      min-height: 40px;
+      padding: 6px 10px;
       border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.1);
       background: rgba(255,255,255,0.06);
@@ -778,6 +780,9 @@
     let isDragging = false;
     let dragMode = null;
     let settings = null;
+    let liveSendLevels = {};
+    let liveSendLevelLoads = new Set();
+    let liveSendLevelError = null;
 
     function getApiBase() {
       if (location.protocol !== 'file:') return '';
@@ -827,6 +832,77 @@
       renderProfiles();
       if (editingProfileId) renderChannelCheckboxes();
       renderMatrix();
+    }
+
+    function getAuxLabel(auxId, options = {}) {
+      const aux = auxBuses.find((item) => item.id === auxId);
+      if (!aux) {
+        return `Aux ${auxId}`;
+      }
+      return aux.name;
+    }
+
+    function formatLiveLevel(level) {
+      if (typeof level !== 'number') return '...';
+      if (level <= 0) return '-∞';
+      const db = (level * 66) - 60;
+      return db > 0 ? `+${db.toFixed(1)} dB` : `${db.toFixed(1)} dB`;
+    }
+
+    async function loadLiveSendLevelsForChannels(inputChannels) {
+      if (!editingProfileId || !inputChannels.length) return;
+
+      const requestChannels = [...new Set(inputChannels)]
+        .filter((channel) => editChannels.has(channel))
+        .filter((channel) => !liveSendLevelLoads.has(channel));
+
+      if (!requestChannels.length) return;
+
+      requestChannels.forEach((channel) => liveSendLevelLoads.add(channel));
+      liveSendLevelError = null;
+      renderChannelCheckboxes();
+
+      try {
+        const response = await fetchJSON('/api/dlive/send-levels', {
+          method: 'POST',
+          body: JSON.stringify({
+            auxBus: editAux,
+            inputChannels: requestChannels,
+          }),
+        });
+
+        Object.entries(response.levels || {}).forEach(([channel, level]) => {
+          liveSendLevels[Number(channel)] = level;
+        });
+      } catch (error) {
+        liveSendLevelError = error.message;
+      } finally {
+        requestChannels.forEach((channel) => liveSendLevelLoads.delete(channel));
+        renderChannelCheckboxes();
+      }
+    }
+
+    async function loadCurrentProfileLiveSendLevels() {
+      liveSendLevels = {};
+      liveSendLevelLoads = new Set();
+      liveSendLevelError = null;
+      renderChannelCheckboxes();
+      await loadLiveSendLevelsForChannels([...editChannels]);
+    }
+
+    async function loadProfiles() {
+      profiles = await fetchJSON('/api/profiles');
+      document.getElementById('connectedCount').textContent =
+        `${profiles.filter((profile) => profile.name).length} / ${profiles.length}`;
+    }
+
+    async function loadMatrix() {
+      matrix = await fetchJSON('/api/matrix');
+      profiles.forEach((profile) => {
+        profile.allowedChannels = channels
+          .filter((channel) => matrix[`${profile.auxBus}-${channel.ch}`])
+          .map((channel) => channel.ch);
+      });
     }
 
     async function loadSettings() {
@@ -924,7 +1000,7 @@
               ${p.name || 'Tap to assign'}
             </div>
           </div>
-          <div class="profile-aux">Aux ${p.auxBus}</div>
+          <div class="profile-aux">${getAuxLabel(p.auxBus)}</div>
           ${p.allowedChannels.length ? `<div class="profile-chcount">${p.allowedChannels.length} ch</div>` : ''}
         </div>
       `).join('');
@@ -947,6 +1023,7 @@
       renderAuxGrid();
       renderChannelCheckboxes();
       renderProfiles();
+      loadCurrentProfileLiveSendLevels();
     }
 
     function closeEdit() {
@@ -959,11 +1036,17 @@
       const grid = document.getElementById('auxGrid');
       grid.innerHTML = auxBuses.map(a => `
         <button class="aux-btn ${editAux === a.id ? 'active' : ''}"
-                onclick="editAux=${a.id};renderAuxGrid()"
+                onclick="selectEditAux(${a.id})"
                 title="${a.name}">
-          ${a.id}
+          ${a.id}<span style="display:block;font-size:10px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${a.name}</span>
         </button>
       `).join('');
+    }
+
+    function selectEditAux(auxId) {
+      editAux = auxId;
+      renderAuxGrid();
+      loadCurrentProfileLiveSendLevels();
     }
 
     function renderChannelCheckboxes() {
@@ -972,8 +1055,16 @@
         container.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:12px">No live channel names have been received from the MixRack yet.</div>';
         return;
       }
+      const errorBanner = liveSendLevelError
+        ? `<div style="padding:8px 10px;color:#ffb4aa;font-size:12px">Live send levels unavailable: ${liveSendLevelError}</div>`
+        : '';
       container.innerHTML = channels.map(ch => {
         const on = editChannels.has(ch.ch);
+        const levelText = on
+          ? (liveSendLevelLoads.has(ch.ch)
+            ? 'Loading...'
+            : formatLiveLevel(liveSendLevels[ch.ch]))
+          : '';
         return `
           <div onclick="toggleEditChannel(${ch.ch})" style="
             display:flex;align-items:center;gap:10px;
@@ -990,15 +1081,20 @@
             ">${on ? '✓' : ''}</div>
             <span style="color:rgba(255,255,255,0.35);font-size:12px;width:20px;font-weight:500">${ch.ch}</span>
             <span style="color:white;font-size:13px">${ch.name}</span>
+            <span style="margin-left:auto;font-size:11px;color:${on ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.2)'};font-variant-numeric:tabular-nums;width:72px;text-align:right">${levelText}</span>
             <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.2);text-transform:uppercase">${ch.group}</span>
           </div>
         `;
       }).join('');
+      container.innerHTML = errorBanner + container.innerHTML;
     }
 
     function toggleEditChannel(ch) {
       if (editChannels.has(ch)) editChannels.delete(ch);
-      else editChannels.add(ch);
+      else {
+        editChannels.add(ch);
+        loadLiveSendLevelsForChannels([ch]);
+      }
       renderChannelCheckboxes();
     }
 
@@ -1016,22 +1112,42 @@
       renderChannelCheckboxes();
     }
 
-    function saveProfile() {
+    async function saveProfile() {
       const p = profiles.find(x => x.id === editingProfileId);
       if (!p) return;
 
-      p.name = document.getElementById('editName').value.trim();
-      p.auxBus = editAux;
-      p.allowedChannels = [...editChannels];
+      const previousAuxBus = p.auxBus;
+      const nextProfile = {
+        ...p,
+        name: document.getElementById('editName').value.trim(),
+        auxBus: editAux,
+      };
 
-      // Update matrix
-      channels.forEach(ch => {
-        const key = `${p.auxBus}-${ch.ch}`;
-        matrix[key] = editChannels.has(ch.ch);
+      channels.forEach((ch) => {
+        delete matrix[`${previousAuxBus}-${ch.ch}`];
+      });
+      channels.forEach((ch) => {
+        matrix[`${nextProfile.auxBus}-${ch.ch}`] = editChannels.has(ch.ch);
       });
 
-      closeEdit();
-      renderProfiles();
+      try {
+        const savedProfile = await fetchJSON(`/api/profiles/${p.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(nextProfile),
+        });
+        await fetchJSON('/api/matrix', {
+          method: 'PUT',
+          body: JSON.stringify(matrix),
+        });
+
+        Object.assign(p, savedProfile);
+        p.allowedChannels = [...editChannels];
+        closeEdit();
+        renderProfiles();
+        renderMatrix();
+      } catch (error) {
+        alert(`Failed to save profile: ${error.message}`);
+      }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1093,6 +1209,7 @@
             <div>
               <div style="font-size:12px;font-weight:600">${p.slot}</div>
               <div style="font-size:10px;color:${p.name ? 'var(--text-dim)' : 'var(--text-muted)'};${!p.name ? 'font-style:italic' : ''}">${p.name || 'Unassigned'}</div>
+              <div style="font-size:10px;color:var(--text-muted)">${getAuxLabel(p.auxBus)}</div>
             </div>
           </div>
         </td>`;
@@ -1156,12 +1273,18 @@
 
     document.addEventListener('mouseup', () => { isDragging = false; dragMode = null; });
 
-    function pushMatrix() {
-      matrixDirty = false;
-      document.getElementById('pushBtn').style.display = 'none';
-      // In production: POST matrix to server, which syncs to dLive
-      console.log('Matrix pushed:', matrix);
-      alert('Channel access matrix saved.');
+    async function pushMatrix() {
+      try {
+        await fetchJSON('/api/matrix', {
+          method: 'PUT',
+          body: JSON.stringify(matrix),
+        });
+        matrixDirty = false;
+        document.getElementById('pushBtn').style.display = 'none';
+        alert('Channel access matrix saved.');
+      } catch (error) {
+        alert(`Failed to save matrix: ${error.message}`);
+      }
     }
 
     async function resyncDLive() {
@@ -1183,6 +1306,10 @@
       try {
         await loadSettings();
         await refreshDLiveData();
+        await loadProfiles();
+        await loadMatrix();
+        renderProfiles();
+        renderMatrix();
       } catch (error) {
         console.error('Failed to load dLive data:', error);
       }
