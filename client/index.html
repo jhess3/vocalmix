@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="VocalMix">
+  <title>VocalMix</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a0c;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --accent: #E85D4A;
+      --green: #34C759;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: white;
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* ═══ LOGIN SCREEN ═══ */
+    .login-screen {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    .login-logo {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: 6px;
+    }
+    .login-sub {
+      font-size: 14px;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 40px;
+    }
+    .login-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      width: 100%;
+      max-width: 500px;
+    }
+    .login-btn {
+      aspect-ratio: 1;
+      border-radius: 16px;
+      border: 2px solid transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .login-btn:active {
+      transform: scale(0.95);
+    }
+    .login-btn .num {
+      font-size: 28px;
+      font-weight: 800;
+    }
+    .login-btn .name {
+      font-size: 11px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 4px;
+    }
+    .login-btn.empty {
+      background: rgba(255,255,255,0.02);
+      border: 2px dashed rgba(255,255,255,0.08);
+      pointer-events: none;
+    }
+    .login-btn.empty .num {
+      color: rgba(255,255,255,0.1);
+      font-size: 20px;
+    }
+
+    /* ═══ MIXER SCREEN ═══ */
+    .mixer-screen {
+      height: 100%;
+      display: none;
+      flex-direction: column;
+    }
+
+    /* Top bar */
+    .mixer-top {
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .mixer-user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .mixer-avatar {
+      width: 34px; height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .mixer-name { font-size: 15px; font-weight: 600; }
+    .mixer-aux { font-size: 12px; color: rgba(255,255,255,0.4); }
+    .btn-logout {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: rgba(255,255,255,0.5);
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* Fader area */
+    .fader-area {
+      flex: 1;
+      display: flex;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 16px 10px;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    /* Individual fader strip */
+    .fader-strip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 72px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 12px 8px 14px;
+      border: 1px solid var(--border);
+    }
+    .fader-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 4px;
+      text-align: center;
+      width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fader-ch {
+      font-size: 9px;
+      color: rgba(255,255,255,0.2);
+      margin-bottom: 10px;
+    }
+
+    /* Vertical fader */
+    .fader-track {
+      position: relative;
+      width: 8px;
+      flex: 1;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      margin: 0 auto;
+      min-height: 200px;
+      cursor: pointer;
+    }
+    .fader-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      border-radius: 4px;
+      transition: height 0.05s;
+    }
+    .fader-thumb {
+      position: absolute;
+      left: 50%;
+      transform: translate(-50%, 50%);
+      width: 40px;
+      height: 22px;
+      background: white;
+      border-radius: 6px;
+      cursor: grab;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+      transition: bottom 0.05s;
+    }
+    .fader-thumb:active {
+      cursor: grabbing;
+      background: #eee;
+    }
+
+    .fader-db {
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 10px;
+      color: rgba(255,255,255,0.6);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .fader-mute {
+      width: 44px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.4);
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.1s;
+    }
+    .fader-mute.muted {
+      background: #FF3B30;
+      border-color: #FF3B30;
+      color: white;
+    }
+
+    /* Preset bar */
+    .preset-bar {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .preset-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: rgba(255,255,255,0.5);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .preset-btn:active { background: rgba(255,255,255,0.1); }
+    .preset-btn.save-btn {
+      margin-left: auto;
+      background: rgba(52,199,89,0.15);
+      border-color: rgba(52,199,89,0.3);
+      color: var(--green);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ LOGIN ═══ -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-logo">VocalMix</div>
+    <div class="login-sub">Tap your name to load your mix</div>
+    <div class="login-grid" id="loginGrid">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- ═══ MIXER ═══ -->
+  <div class="mixer-screen" id="mixerScreen">
+    <div class="mixer-top">
+      <div class="mixer-user">
+        <div class="mixer-avatar" id="mixerAvatar">1</div>
+        <div>
+          <div class="mixer-name" id="mixerName">Sarah M.</div>
+          <div class="mixer-aux" id="mixerAux">Aux 1 · Vox 1</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="logout()">Switch User</button>
+    </div>
+
+    <div class="fader-area" id="faderArea">
+      <!-- Populated by JS -->
+    </div>
+
+    <div class="preset-bar">
+      <button class="preset-btn" onclick="resetToSaved()">↺ Reset</button>
+      <button class="preset-btn" onclick="allFadersUnity()">0 dB</button>
+      <button class="preset-btn save-btn" onclick="saveMix()">✓ Save Mix</button>
+    </div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════
+    // SERVER DISCOVERY
+    // ═══════════════════════════════════════════════════════════
+
+    // In production, this discovers the server via Bonjour/.local
+    // For now, use the current host
+    const SERVER = window.location.origin;
+
+    // ═══════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════
+
+    let currentProfile = null;
+    let allowedChannels = [];
+    let faderLevels = {};  // { ch: 0.0-1.0 }
+    let mutedChannels = new Set();
+    let savedLevels = {};
+    let activeTouches = {};  // { touchId: { ch, startY, startLevel } }
+
+    // Simulated channel data (from dLive via server)
+    const channels = [
+      { ch: 1, name: 'Lead Vox', color: '#E85D4A', group: 'vocals' },
+      { ch: 2, name: 'BGV 1', color: '#E85D4A', group: 'vocals' },
+      { ch: 3, name: 'BGV 2', color: '#E85D4A', group: 'vocals' },
+      { ch: 4, name: 'BGV 3', color: '#E85D4A', group: 'vocals' },
+      { ch: 5, name: 'Keys L', color: '#C77DFF', group: 'keys' },
+      { ch: 6, name: 'Keys R', color: '#C77DFF', group: 'keys' },
+      { ch: 7, name: 'Ac Gtr', color: '#E8A44A', group: 'guitars' },
+      { ch: 8, name: 'El Gtr', color: '#E8A44A', group: 'guitars' },
+      { ch: 9, name: 'Bass DI', color: '#4AE88D', group: 'bass' },
+      { ch: 10, name: 'Kick', color: '#4A9EE8', group: 'drums' },
+      { ch: 11, name: 'Snare', color: '#4A9EE8', group: 'drums' },
+      { ch: 12, name: 'HH', color: '#4A9EE8', group: 'drums' },
+      { ch: 13, name: 'OH L', color: '#4A9EE8', group: 'drums' },
+      { ch: 14, name: 'OH R', color: '#4A9EE8', group: 'drums' },
+      { ch: 15, name: 'Click', color: '#8B8B8B', group: 'utility' },
+      { ch: 16, name: 'Trk L', color: '#FF6B9D', group: 'tracks' },
+      { ch: 17, name: 'Trk R', color: '#FF6B9D', group: 'tracks' },
+      { ch: 18, name: 'MD Talk', color: '#8B8B8B', group: 'utility' },
+      { ch: 19, name: 'Pastor', color: '#8B8B8B', group: 'utility' },
+      { ch: 20, name: 'Reverb', color: '#00D4AA', group: 'fx' },
+    ];
+
+    // Simulated profiles (from server)
+    const profiles = [
+      { id: 1, slot: 'Vox 1', name: 'Sarah M.', auxBus: 1, color: '#E85D4A' },
+      { id: 2, slot: 'Vox 2', name: 'James K.', auxBus: 2, color: '#E8A44A' },
+      { id: 3, slot: 'Vox 3', name: 'Maria L.', auxBus: 3, color: '#4AE88D' },
+      { id: 4, slot: 'Vox 4', name: 'David R.', auxBus: 4, color: '#4A9EE8' },
+      { id: 5, slot: 'Vox 5', name: '', auxBus: 5, color: '#C77DFF' },
+      { id: 6, slot: 'Vox 6', name: '', auxBus: 6, color: '#FF6B9D' },
+      { id: 7, slot: 'Vox 7', name: '', auxBus: 7, color: '#00D4AA' },
+      { id: 8, slot: 'Vox 8', name: '', auxBus: 8, color: '#8B8B8B' },
+    ];
+
+    const allowedPerProfile = {
+      1: [1,2,3,4,5,6,15,16,17,18],
+      2: [1,2,3,4,5,6,7,15,16,17,18],
+      3: [1,2,3,4,5,6,15,16,17,18,20],
+      4: [1,5,6,9,15,16,17],
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // LOGIN
+    // ═══════════════════════════════════════════════════════════
+
+    function renderLogin() {
+      const grid = document.getElementById('loginGrid');
+      grid.innerHTML = profiles.map(p => {
+        if (!p.name) {
+          return `<div class="login-btn empty"><span class="num">—</span></div>`;
+        }
+        return `
+          <div class="login-btn" style="background:linear-gradient(145deg,${p.color}25,${p.color}10);border-color:${p.color}40"
+               onclick="login(${p.id})">
+            <span class="num" style="color:${p.color}">${p.id}</span>
+            <span class="name">${p.name}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function login(profileId) {
+      currentProfile = profiles.find(p => p.id === profileId);
+      if (!currentProfile) return;
+
+      // In production: POST to /api/login
+      allowedChannels = allowedPerProfile[profileId] || [];
+      savedLevels = {};
+
+      // Default levels at ~70%
+      allowedChannels.forEach(ch => {
+        faderLevels[ch] = savedLevels[ch] || 0.7;
+      });
+
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('mixerScreen').style.display = 'flex';
+
+      document.getElementById('mixerAvatar').textContent = currentProfile.id;
+      document.getElementById('mixerAvatar').style.background =
+        `linear-gradient(135deg,${currentProfile.color},${currentProfile.color}99)`;
+      document.getElementById('mixerName').textContent = currentProfile.name;
+      document.getElementById('mixerAux').textContent =
+        `Aux ${currentProfile.auxBus} · ${currentProfile.slot}`;
+
+      renderFaders();
+    }
+
+    function logout() {
+      currentProfile = null;
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('mixerScreen').style.display = 'none';
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FADERS
+    // ═══════════════════════════════════════════════════════════
+
+    function levelToDb(level) {
+      if (level <= 0) return '-∞';
+      // Map 0-1 to -60 to +6 dB (approximate)
+      const db = (level * 66) - 60;
+      if (db > 0) return `+${db.toFixed(1)}`;
+      return db.toFixed(1);
+    }
+
+    function renderFaders() {
+      const area = document.getElementById('faderArea');
+      const visibleChannels = channels.filter(c => allowedChannels.includes(c.ch));
+
+      area.innerHTML = visibleChannels.map(ch => {
+        const level = faderLevels[ch.ch] || 0;
+        const muted = mutedChannels.has(ch.ch);
+        const pct = level * 100;
+
+        return `
+          <div class="fader-strip" data-ch="${ch.ch}">
+            <div class="fader-label">${ch.name}</div>
+            <div class="fader-ch">CH ${ch.ch}</div>
+            <div class="fader-track" data-ch="${ch.ch}">
+              <div class="fader-fill" style="height:${pct}%;background:${muted ? '#FF3B30' : ch.color};opacity:${muted ? 0.3 : 0.4}"></div>
+              <div class="fader-thumb" style="bottom:${pct}%" data-ch="${ch.ch}"></div>
+            </div>
+            <div class="fader-db">${levelToDb(level)}</div>
+            <button class="fader-mute ${muted ? 'muted' : ''}"
+                    onclick="toggleMute(${ch.ch})">
+              ${muted ? 'MUTE' : 'M'}
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      // Attach touch events to fader tracks
+      area.querySelectorAll('.fader-track').forEach(track => {
+        track.addEventListener('touchstart', onFaderTouchStart, { passive: false });
+        track.addEventListener('touchmove', onFaderTouchMove, { passive: false });
+        track.addEventListener('touchend', onFaderTouchEnd, { passive: false });
+
+        // Mouse fallback for desktop testing
+        track.addEventListener('mousedown', onFaderMouseDown);
+      });
+    }
+
+    function setFaderLevel(ch, level) {
+      level = Math.max(0, Math.min(1, level));
+      faderLevels[ch] = level;
+
+      const strip = document.querySelector(`.fader-strip[data-ch="${ch}"]`);
+      if (!strip) return;
+
+      const pct = level * 100;
+      const muted = mutedChannels.has(ch);
+      const fill = strip.querySelector('.fader-fill');
+      const thumb = strip.querySelector('.fader-thumb');
+      const db = strip.querySelector('.fader-db');
+
+      fill.style.height = `${pct}%`;
+      thumb.style.bottom = `${pct}%`;
+      db.textContent = levelToDb(level);
+
+      // In production: send MIDI command to dLive via server
+      // fetch(`${SERVER}/api/fader`, { method: 'POST', body: JSON.stringify({ ch, level, aux: currentProfile.auxBus }) });
+    }
+
+    function toggleMute(ch) {
+      if (mutedChannels.has(ch)) mutedChannels.delete(ch);
+      else mutedChannels.add(ch);
+      renderFaders();
+    }
+
+    // Touch handling for multi-touch faders
+    function onFaderTouchStart(e) {
+      e.preventDefault();
+      const track = e.currentTarget;
+      const ch = parseInt(track.dataset.ch);
+      const rect = track.getBoundingClientRect();
+
+      for (const touch of e.changedTouches) {
+        const y = touch.clientY - rect.top;
+        const level = 1 - (y / rect.height);
+        activeTouches[touch.identifier] = { ch, trackRect: rect };
+        setFaderLevel(ch, level);
+      }
+    }
+
+    function onFaderTouchMove(e) {
+      e.preventDefault();
+      for (const touch of e.changedTouches) {
+        const info = activeTouches[touch.identifier];
+        if (!info) continue;
+        const y = touch.clientY - info.trackRect.top;
+        const level = 1 - (y / info.trackRect.height);
+        setFaderLevel(info.ch, level);
+      }
+    }
+
+    function onFaderTouchEnd(e) {
+      for (const touch of e.changedTouches) {
+        delete activeTouches[touch.identifier];
+      }
+      // Auto-save levels after touch ends
+      autoSave();
+    }
+
+    // Mouse fallback
+    function onFaderMouseDown(e) {
+      const track = e.currentTarget;
+      const ch = parseInt(track.dataset.ch);
+      const rect = track.getBoundingClientRect();
+
+      const onMove = (e) => {
+        const y = e.clientY - rect.top;
+        const level = 1 - (y / rect.height);
+        setFaderLevel(ch, level);
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        autoSave();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+
+      const y = e.clientY - rect.top;
+      setFaderLevel(ch, 1 - (y / rect.height));
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PRESET ACTIONS
+    // ═══════════════════════════════════════════════════════════
+
+    function resetToSaved() {
+      Object.entries(savedLevels).forEach(([ch, level]) => {
+        setFaderLevel(parseInt(ch), level);
+      });
+    }
+
+    function allFadersUnity() {
+      // Unity (0 dB) is at ~0.91 in our 0-1 mapping
+      const unity = 60 / 66; // ~0.909
+      allowedChannels.forEach(ch => setFaderLevel(ch, unity));
+    }
+
+    function saveMix() {
+      savedLevels = { ...faderLevels };
+      // In production: POST to /api/save-levels
+      // Flash feedback
+      const btn = document.querySelector('.save-btn');
+      btn.textContent = '✓ Saved!';
+      setTimeout(() => { btn.textContent = '✓ Save Mix'; }, 1500);
+    }
+
+    let saveTimeout = null;
+    function autoSave() {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        // In production: POST levels to server
+        console.log('Auto-saved levels:', faderLevels);
+      }, 2000);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════════
+    renderLogin();
+  </script>
+</body>
+</html>

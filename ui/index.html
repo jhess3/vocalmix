@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocalMix Server</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0e0e10;
+      --surface: rgba(255,255,255,0.03);
+      --surface-hover: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
+      --text: #ffffff;
+      --text-dim: rgba(255,255,255,0.5);
+      --text-muted: rgba(255,255,255,0.25);
+      --accent: #E85D4A;
+      --green: #34C759;
+      --yellow: #FF9500;
+      --blue: #4A9EE8;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      -webkit-app-region: drag;
+      min-height: 100vh;
+    }
+
+    button, input, select, a { -webkit-app-region: no-drag; }
+
+    /* Title bar with drag region */
+    .titlebar {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px 0 80px; /* space for traffic lights */
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: rgba(14,14,16,0.9);
+      backdrop-filter: blur(20px);
+      z-index: 50;
+    }
+    .titlebar h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .titlebar .status {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px;
+    }
+    .status-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+    .status-dot.red { background: #FF3B30; box-shadow: 0 0 6px #FF3B30; }
+
+    /* Main layout */
+    .main {
+      padding: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* Tab navigation */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 24px;
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 3px;
+      width: fit-content;
+    }
+    .tab {
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab.active {
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+    }
+    .tab:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* Status cards row */
+    .status-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .status-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .status-card .label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-card .value {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .status-card .sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Profile cards */
+    .profiles-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .profile-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .profile-card:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+    }
+    .profile-card.selected {
+      border-color: var(--accent);
+      background: rgba(232,93,74,0.06);
+    }
+    .profile-avatar {
+      width: 42px; height: 42px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+    .profile-avatar.unassigned {
+      background: rgba(255,255,255,0.04);
+      border: 1px dashed rgba(255,255,255,0.15);
+      font-size: 20px;
+      color: rgba(255,255,255,0.2);
+    }
+    .profile-info { flex: 1; min-width: 0; }
+    .profile-slot {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .profile-name {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+    .profile-name.empty { color: var(--text-muted); font-style: italic; }
+    .profile-aux {
+      background: rgba(255,255,255,0.06);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .profile-chcount {
+      font-size: 11px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .online-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 4px var(--green);
+    }
+
+    /* Edit panel */
+    .edit-panel {
+      position: fixed;
+      top: 53px; right: 0; bottom: 0;
+      width: 380px;
+      background: #1a1a1e;
+      border-left: 1px solid var(--border);
+      display: none;
+      flex-direction: column;
+      z-index: 40;
+    }
+    .edit-panel.open { display: flex; }
+    .edit-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .edit-body {
+      padding: 20px 24px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .edit-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+    }
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .field-input {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: white;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      margin-bottom: 18px;
+    }
+    .field-input:focus {
+      border-color: var(--accent);
+    }
+    .aux-grid {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .aux-btn {
+      width: 40px; height: 36px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+    .aux-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    .btn-save {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-save:hover { filter: brightness(1.1); }
+    .btn-close {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      border: none;
+      background: rgba(255,255,255,0.06);
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Matrix view */
+    .matrix-container {
+      overflow-x: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 800px;
+    }
+    .matrix-table th {
+      background: #131315;
+      padding: 6px 4px;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    .matrix-table th.row-header {
+      text-align: left;
+      padding: 10px 12px;
+      min-width: 160px;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    .matrix-table td {
+      padding: 3px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      min-width: 40px;
+    }
+    .matrix-table td.row-header {
+      text-align: left;
+      padding: 8px 12px;
+      position: sticky;
+      left: 0;
+      background: #111113;
+      z-index: 2;
+      border-right: 1px solid var(--border);
+    }
+    .matrix-cell {
+      width: 30px; height: 26px;
+      border-radius: 5px;
+      margin: 0 auto;
+      border: 1.5px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.08s;
+    }
+    .matrix-cell:hover {
+      border-color: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.04);
+    }
+    .matrix-cell.on {
+      border-color: var(--cell-color, var(--accent));
+      background: color-mix(in srgb, var(--cell-color, var(--accent)) 20%, transparent);
+    }
+    .matrix-cell.on .dot {
+      width: 7px; height: 7px;
+      border-radius: 2px;
+      background: var(--cell-color, var(--accent));
+    }
+
+    .group-header {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.6;
+    }
+    .ch-number {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .ch-name {
+      font-size: 10px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .count-cell {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Settings view */
+    .settings-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .settings-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row .label { font-size: 13px; }
+    .settings-row .desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .settings-input {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      outline: none;
+      width: 180px;
+      text-align: right;
+    }
+
+    /* Footer */
+    .footer-tip {
+      margin-top: 20px;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .footer-tip code {
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+
+    /* Sync banner */
+    .sync-banner {
+      background: rgba(74, 158, 232, 0.1);
+      border: 1px solid rgba(74, 158, 232, 0.2);
+      border-radius: 10px;
+      padding: 12px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--blue);
+    }
+    .sync-banner .icon { font-size: 18px; }
+    .sync-banner .action {
+      margin-left: auto;
+      background: var(--blue);
+      border: none;
+      border-radius: 7px;
+      padding: 6px 14px;
+      color: white;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .push-btn {
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 9px 18px;
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .push-btn:hover { filter: brightness(1.1); }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.8);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Title bar -->
+  <div class="titlebar">
+    <h1>VocalMix</h1>
+    <div class="status">
+      <span><span class="status-dot green" id="dliveStatusDot"></span>dLive: <span id="dliveStatusText">Simulated</span></span>
+      <span><span class="status-dot green"></span>Server: <span id="serverPort">3000</span></span>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('profiles')">Profiles</button>
+      <button class="tab" onclick="switchTab('matrix')">Channel Matrix</button>
+      <button class="tab" onclick="switchTab('settings')">Settings</button>
+    </div>
+
+    <!-- Status cards -->
+    <div class="status-cards">
+      <div class="status-card">
+        <div class="label"><span class="status-dot green"></span> Server</div>
+        <div class="value">Running</div>
+        <div class="sub">vocalmix.local:3000</div>
+      </div>
+      <div class="status-card">
+        <div class="label"><span class="status-dot green" id="dliveCardDot"></span> dLive</div>
+        <div class="value" id="dliveCardStatus">Simulated</div>
+        <div class="sub" id="dliveCardIP">Dev Mode</div>
+      </div>
+      <div class="status-card">
+        <div class="label"><span class="status-dot" style="background:#E8A44A;box-shadow:0 0 6px #E8A44A40"></span> Connected</div>
+        <div class="value" id="connectedCount">0 / 4</div>
+        <div class="sub">vocalists online</div>
+      </div>
+      <div class="status-card">
+        <div class="label"><span class="status-dot" style="background:#4A9EE8;box-shadow:0 0 6px #4A9EE840"></span> Channels</div>
+        <div class="value" id="channelCount">20</div>
+        <div class="sub">synced from dLive</div>
+      </div>
+    </div>
+
+    <!-- Sync banner -->
+    <div class="sync-banner" id="syncBanner">
+      <span class="icon">⟳</span>
+      <div>
+        <strong>Channel data loaded from dLive.</strong>
+        <span style="opacity:0.7"> 20 inputs, 12 aux buses synced.</span>
+      </div>
+      <button class="action" onclick="resyncDLive()">Re-sync</button>
+    </div>
+
+    <!-- ═══ PROFILES TAB ═══ -->
+    <div id="tab-profiles">
+      <div class="section-header">
+        <h2>Vocalist Profiles</h2>
+      </div>
+      <div class="profiles-grid" id="profilesGrid">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- ═══ MATRIX TAB ═══ -->
+    <div id="tab-matrix" style="display:none">
+      <div class="section-header">
+        <h2>Channel Access Matrix</h2>
+        <button class="push-btn" onclick="pushMatrix()" id="pushBtn" style="display:none">
+          ↑ Push to dLive
+        </button>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        Click cells to toggle · Drag to paint · Row names and channel names pulled from dLive
+      </p>
+      <div class="matrix-container">
+        <table class="matrix-table" id="matrixTable">
+          <!-- Populated by JS -->
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ SETTINGS TAB ═══ -->
+    <div id="tab-settings" style="display:none">
+      <div class="settings-section">
+        <h3>dLive Connection</h3>
+        <div class="settings-row">
+          <div>
+            <div class="label">MixRack IP Address</div>
+            <div class="desc">The IP of your dLive MixRack on the audio network</div>
+          </div>
+          <input class="settings-input" id="dliveIP" value="192.168.1.70" placeholder="192.168.1.70">
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="label">Auto-connect on launch</div>
+            <div class="desc">Automatically connect to the dLive when VocalMix starts</div>
+          </div>
+          <input type="checkbox" id="autoConnect" checked>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Server</h3>
+        <div class="settings-row">
+          <div>
+            <div class="label">Server Name</div>
+            <div class="desc">The Bonjour name iPads will see</div>
+          </div>
+          <input class="settings-input" id="serverName" value="VocalMix">
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="label">Port</div>
+            <div class="desc">HTTP port for the web interface</div>
+          </div>
+          <input class="settings-input" id="serverPortSetting" value="3000" style="width:80px">
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Fader Limits</h3>
+        <div class="settings-row">
+          <div>
+            <div class="label">Minimum Level (dB)</div>
+            <div class="desc">Floor that vocalists can set a fader to</div>
+          </div>
+          <input class="settings-input" id="faderMin" value="-60" style="width:80px">
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="label">Maximum Level (dB)</div>
+            <div class="desc">Ceiling to prevent blasting their ears</div>
+          </div>
+          <input class="settings-input" id="faderMax" value="6" style="width:80px">
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer tip -->
+    <div class="footer-tip">
+      <span style="font-size:16px">💡</span>
+      <span>Vocalists connect by opening <code>vocalmix.local</code> on any iPad on the audio network. No app install needed.</span>
+    </div>
+  </div>
+
+  <!-- Edit panel (slides in from right) -->
+  <div class="edit-panel" id="editPanel">
+    <div class="edit-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="profile-avatar" id="editAvatar" style="width:36px;height:36px;border-radius:10px;font-size:16px">1</div>
+        <div>
+          <div style="font-size:15px;font-weight:600" id="editSlot">Vox 1</div>
+          <div style="font-size:12px;color:var(--text-muted)">Edit Profile</div>
+        </div>
+      </div>
+      <button class="btn-close" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="edit-body">
+      <div class="field-label">Display Name</div>
+      <input class="field-input" id="editName" placeholder="e.g. Sarah M.">
+
+      <div class="field-label">Aux Bus Assignment</div>
+      <div class="aux-grid" id="auxGrid">
+        <!-- Populated by JS from dLive aux bus list -->
+      </div>
+
+      <div class="field-label">Quick Channel Presets</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
+        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('vocalist-basic')">Vocalist Basic</button>
+        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('vocalist-full')">Vocalist Full</button>
+        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('all')">All Inputs</button>
+        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('clear')">Clear</button>
+      </div>
+
+      <div class="field-label">Allowed Channels</div>
+      <div id="channelCheckboxes" style="display:flex;flex-direction:column;gap:2px">
+        <!-- Populated by JS from dLive channel list -->
+      </div>
+    </div>
+    <div class="edit-footer">
+      <button class="btn-save" onclick="saveProfile()">Save Changes</button>
+    </div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════
+
+    // Simulated dLive data (in production, pulled from MixRack)
+    const GROUP_COLORS = {
+      vocals: '#E85D4A', keys: '#C77DFF', guitars: '#E8A44A',
+      bass: '#4AE88D', drums: '#4A9EE8', utility: '#8B8B8B',
+      tracks: '#FF6B9D', fx: '#00D4AA',
+    };
+
+    let channels = [
+      { ch: 1, name: 'Lead Vox', color: '#E85D4A', group: 'vocals' },
+      { ch: 2, name: 'BGV 1', color: '#E85D4A', group: 'vocals' },
+      { ch: 3, name: 'BGV 2', color: '#E85D4A', group: 'vocals' },
+      { ch: 4, name: 'BGV 3', color: '#E85D4A', group: 'vocals' },
+      { ch: 5, name: 'Keys L', color: '#C77DFF', group: 'keys' },
+      { ch: 6, name: 'Keys R', color: '#C77DFF', group: 'keys' },
+      { ch: 7, name: 'Ac Gtr', color: '#E8A44A', group: 'guitars' },
+      { ch: 8, name: 'El Gtr', color: '#E8A44A', group: 'guitars' },
+      { ch: 9, name: 'Bass DI', color: '#4AE88D', group: 'bass' },
+      { ch: 10, name: 'Kick', color: '#4A9EE8', group: 'drums' },
+      { ch: 11, name: 'Snare', color: '#4A9EE8', group: 'drums' },
+      { ch: 12, name: 'HH', color: '#4A9EE8', group: 'drums' },
+      { ch: 13, name: 'OH L', color: '#4A9EE8', group: 'drums' },
+      { ch: 14, name: 'OH R', color: '#4A9EE8', group: 'drums' },
+      { ch: 15, name: 'Click', color: '#8B8B8B', group: 'utility' },
+      { ch: 16, name: 'Trk L', color: '#FF6B9D', group: 'tracks' },
+      { ch: 17, name: 'Trk R', color: '#FF6B9D', group: 'tracks' },
+      { ch: 18, name: 'MD Talk', color: '#8B8B8B', group: 'utility' },
+      { ch: 19, name: 'Pastor', color: '#8B8B8B', group: 'utility' },
+      { ch: 20, name: 'Reverb', color: '#00D4AA', group: 'fx' },
+    ];
+
+    let auxBuses = [
+      { id: 1, name: 'Vox 1', color: '#E85D4A' },
+      { id: 2, name: 'Vox 2', color: '#E8A44A' },
+      { id: 3, name: 'Vox 3', color: '#4AE88D' },
+      { id: 4, name: 'Vox 4', color: '#4A9EE8' },
+      { id: 5, name: 'Vox 5', color: '#C77DFF' },
+      { id: 6, name: 'Vox 6', color: '#FF6B9D' },
+      { id: 7, name: 'Vox 7', color: '#00D4AA' },
+      { id: 8, name: 'Vox 8', color: '#E8A44A' },
+      { id: 9, name: 'IEM MD', color: '#8B8B8B' },
+      { id: 10, name: 'IEM Keys', color: '#C77DFF' },
+      { id: 11, name: 'Wedge DS', color: '#4A9EE8' },
+      { id: 12, name: 'Wedge DR', color: '#4A9EE8' },
+    ];
+
+    const PROFILE_COLORS = ['#E85D4A','#E8A44A','#4AE88D','#4A9EE8','#C77DFF','#FF6B9D','#00D4AA','#8B8B8B'];
+
+    let profiles = Array.from({ length: 8 }, (_, i) => ({
+      id: i + 1,
+      slot: `Vox ${i + 1}`,
+      name: ['Sarah M.','James K.','Maria L.','David R.','','','',''][i],
+      auxBus: i + 1,
+      color: PROFILE_COLORS[i],
+      allowedChannels: [
+        [1,2,3,4,5,6,15,16,17,18],
+        [1,2,3,4,5,6,7,15,16,17,18],
+        [1,2,3,4,5,6,15,16,17,18,20],
+        [1,5,6,9,15,16,17],
+        [],[],[],[],
+      ][i],
+      connected: [true, true, false, false, false, false, false, false][i],
+      lastSeen: ['Now','Now','2 min ago','Last Sunday','Never','Never','Never','Never'][i],
+    }));
+
+    // Channel access matrix: key = "auxBusId-channelNum"
+    let matrix = {};
+    profiles.forEach(p => {
+      p.allowedChannels.forEach(ch => {
+        matrix[`${p.auxBus}-${ch}`] = true;
+      });
+    });
+
+    let editingProfileId = null;
+    let editAux = 1;
+    let editChannels = new Set();
+    let matrixDirty = false;
+    let isDragging = false;
+    let dragMode = null;
+
+    // ═══════════════════════════════════════════════════════════
+    // TAB SWITCHING
+    // ═══════════════════════════════════════════════════════════
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', ['profiles','matrix','settings'][i] === tab);
+      });
+      ['profiles','matrix','settings'].forEach(t => {
+        const el = document.getElementById(`tab-${t}`);
+        if (el) el.style.display = t === tab ? 'block' : 'none';
+      });
+      if (tab === 'matrix') renderMatrix();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PROFILES
+    // ═══════════════════════════════════════════════════════════
+
+    function renderProfiles() {
+      const grid = document.getElementById('profilesGrid');
+      grid.innerHTML = profiles.map(p => `
+        <div class="profile-card ${editingProfileId === p.id ? 'selected' : ''}"
+             onclick="openEdit(${p.id})">
+          <div class="profile-avatar ${!p.name ? 'unassigned' : ''}"
+               style="${p.name ? `background:linear-gradient(135deg,${p.color},${p.color}aa)` : ''}">
+            ${p.name ? p.id : '+'}
+          </div>
+          <div class="profile-info">
+            <div class="profile-slot">
+              ${p.slot}
+              ${p.connected ? '<span class="online-dot"></span>' : ''}
+            </div>
+            <div class="profile-name ${!p.name ? 'empty' : ''}">
+              ${p.name || 'Tap to assign'}
+            </div>
+          </div>
+          <div class="profile-aux">Aux ${p.auxBus}</div>
+          ${p.allowedChannels.length ? `<div class="profile-chcount">${p.allowedChannels.length} ch</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function openEdit(id) {
+      const p = profiles.find(x => x.id === id);
+      if (!p) return;
+      editingProfileId = id;
+      editAux = p.auxBus;
+      editChannels = new Set(p.allowedChannels);
+
+      document.getElementById('editAvatar').textContent = p.id;
+      document.getElementById('editAvatar').style.background =
+        p.name ? `linear-gradient(135deg,${p.color},${p.color}aa)` : 'rgba(255,255,255,0.04)';
+      document.getElementById('editSlot').textContent = p.slot;
+      document.getElementById('editName').value = p.name || '';
+      document.getElementById('editPanel').classList.add('open');
+
+      renderAuxGrid();
+      renderChannelCheckboxes();
+      renderProfiles();
+    }
+
+    function closeEdit() {
+      editingProfileId = null;
+      document.getElementById('editPanel').classList.remove('open');
+      renderProfiles();
+    }
+
+    function renderAuxGrid() {
+      const grid = document.getElementById('auxGrid');
+      grid.innerHTML = auxBuses.map(a => `
+        <button class="aux-btn ${editAux === a.id ? 'active' : ''}"
+                onclick="editAux=${a.id};renderAuxGrid()"
+                title="${a.name}">
+          ${a.id}
+        </button>
+      `).join('');
+    }
+
+    function renderChannelCheckboxes() {
+      const container = document.getElementById('channelCheckboxes');
+      container.innerHTML = channels.map(ch => {
+        const on = editChannels.has(ch.ch);
+        return `
+          <div onclick="toggleEditChannel(${ch.ch})" style="
+            display:flex;align-items:center;gap:10px;
+            padding:7px 10px;border-radius:6px;cursor:pointer;
+            background:${on ? `color-mix(in srgb, ${ch.color} 12%, transparent)` : 'transparent'};
+            border:1px solid ${on ? `color-mix(in srgb, ${ch.color} 30%, transparent)` : 'transparent'};
+          ">
+            <div style="
+              width:18px;height:18px;border-radius:4px;
+              background:${on ? ch.color : 'rgba(255,255,255,0.1)'};
+              border:${on ? 'none' : '1px solid rgba(255,255,255,0.15)'};
+              display:flex;align-items:center;justify-content:center;
+              font-size:11px;color:white;
+            ">${on ? '✓' : ''}</div>
+            <span style="color:rgba(255,255,255,0.35);font-size:12px;width:20px;font-weight:500">${ch.ch}</span>
+            <span style="color:white;font-size:13px">${ch.name}</span>
+            <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.2);text-transform:uppercase">${ch.group}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleEditChannel(ch) {
+      if (editChannels.has(ch)) editChannels.delete(ch);
+      else editChannels.add(ch);
+      renderChannelCheckboxes();
+    }
+
+    function applyPreset(type) {
+      const vocalBasic = [1,2,3,4,5,6,15,16,17,18];
+      const vocalFull = [1,2,3,4,5,6,7,8,9,15,16,17,18,19,20];
+      const all = channels.map(c => c.ch);
+
+      switch (type) {
+        case 'vocalist-basic': editChannels = new Set(vocalBasic); break;
+        case 'vocalist-full': editChannels = new Set(vocalFull); break;
+        case 'all': editChannels = new Set(all); break;
+        case 'clear': editChannels = new Set(); break;
+      }
+      renderChannelCheckboxes();
+    }
+
+    function saveProfile() {
+      const p = profiles.find(x => x.id === editingProfileId);
+      if (!p) return;
+
+      p.name = document.getElementById('editName').value.trim();
+      p.auxBus = editAux;
+      p.allowedChannels = [...editChannels];
+
+      // Update matrix
+      channels.forEach(ch => {
+        const key = `${p.auxBus}-${ch.ch}`;
+        matrix[key] = editChannels.has(ch.ch);
+      });
+
+      closeEdit();
+      renderProfiles();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // MATRIX
+    // ═══════════════════════════════════════════════════════════
+
+    function renderMatrix() {
+      const table = document.getElementById('matrixTable');
+      const groups = [];
+      let lastGroup = null;
+      channels.forEach(c => {
+        if (c.group !== lastGroup) {
+          groups.push({ group: c.group, count: 0 });
+          lastGroup = c.group;
+        }
+        groups[groups.length - 1].count++;
+      });
+
+      let html = '<thead>';
+      // Group header row
+      html += '<tr><th class="row-header" style="border-bottom:1px solid var(--border)"><span style="font-size:10px;color:var(--text-muted)">Aux → Input</span></th>';
+      groups.forEach(g => {
+        html += `<th colspan="${g.count}" style="border-left:1px solid var(--border)">
+          <span class="group-header" style="color:${GROUP_COLORS[g.group]}">${g.group.toUpperCase()}</span>
+        </th>`;
+      });
+      html += '<th style="width:45px"></th></tr>';
+
+      // Channel names row
+      html += '<tr><th class="row-header"></th>';
+      channels.forEach((ch, i) => {
+        const isFirst = i === 0 || channels[i-1].group !== ch.group;
+        html += `<th style="${isFirst ? 'border-left:1px solid var(--border)' : ''}">
+          <div class="ch-number">${ch.ch}</div>
+          <div class="ch-name">${ch.name}</div>
+        </th>`;
+      });
+      html += '<th><span class="ch-number">#</span></th></tr></thead>';
+
+      // Rows
+      html += '<tbody>';
+      profiles.forEach(p => {
+        const count = channels.filter(c => matrix[`${p.auxBus}-${c.ch}`]).length;
+        html += `<tr>`;
+        html += `<td class="row-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+              font-size:13px;font-weight:700;color:white;flex-shrink:0;
+              ${p.name ? `background:linear-gradient(135deg,${p.color},${p.color}99)` : 'background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.12)'}">
+              ${p.id}
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600">${p.slot}</div>
+              <div style="font-size:10px;color:${p.name ? 'var(--text-dim)' : 'var(--text-muted)'};${!p.name ? 'font-style:italic' : ''}">${p.name || 'Unassigned'}</div>
+            </div>
+          </div>
+        </td>`;
+
+        channels.forEach((ch, i) => {
+          const key = `${p.auxBus}-${ch.ch}`;
+          const on = !!matrix[key];
+          const isFirst = i === 0 || channels[i-1].group !== ch.group;
+          html += `<td style="${isFirst ? 'border-left:1px solid var(--border)' : ''}">
+            <div class="matrix-cell ${on ? 'on' : ''}"
+                 style="--cell-color:${ch.color}"
+                 data-aux="${p.auxBus}" data-ch="${ch.ch}"
+                 onmousedown="matrixMouseDown(event,${p.auxBus},${ch.ch})"
+                 onmouseenter="matrixMouseEnter(event,${p.auxBus},${ch.ch})">
+              ${on ? '<div class="dot"></div>' : ''}
+            </div>
+          </td>`;
+        });
+
+        html += `<td class="count-cell">${count}</td>`;
+        html += '</tr>';
+      });
+      html += '</tbody>';
+
+      table.innerHTML = html;
+    }
+
+    function matrixMouseDown(e, aux, ch) {
+      e.preventDefault();
+      const key = `${aux}-${ch}`;
+      dragMode = !matrix[key];
+      isDragging = true;
+      matrix[key] = dragMode;
+      matrixDirty = true;
+      document.getElementById('pushBtn').style.display = 'flex';
+
+      // Update the corresponding profile
+      const p = profiles.find(x => x.auxBus === aux);
+      if (p) {
+        if (dragMode) { if (!p.allowedChannels.includes(ch)) p.allowedChannels.push(ch); }
+        else { p.allowedChannels = p.allowedChannels.filter(c => c !== ch); }
+      }
+
+      renderMatrix();
+    }
+
+    function matrixMouseEnter(e, aux, ch) {
+      if (!isDragging) return;
+      const key = `${aux}-${ch}`;
+      matrix[key] = dragMode;
+      matrixDirty = true;
+
+      const p = profiles.find(x => x.auxBus === aux);
+      if (p) {
+        if (dragMode) { if (!p.allowedChannels.includes(ch)) p.allowedChannels.push(ch); }
+        else { p.allowedChannels = p.allowedChannels.filter(c => c !== ch); }
+      }
+
+      renderMatrix();
+    }
+
+    document.addEventListener('mouseup', () => { isDragging = false; dragMode = null; });
+
+    function pushMatrix() {
+      matrixDirty = false;
+      document.getElementById('pushBtn').style.display = 'none';
+      // In production: POST matrix to server, which syncs to dLive
+      console.log('Matrix pushed:', matrix);
+      alert('Channel access matrix saved.');
+    }
+
+    function resyncDLive() {
+      // In production: re-pull channel names from dLive MixRack
+      alert('Re-syncing from dLive...\n\nIn production, this pulls fresh channel names, colors, and aux bus labels from the MixRack.');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════════
+
+    renderProfiles();
+  </script>
+</body>
+</html>
