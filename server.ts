@@ -19,8 +19,8 @@ let serverState = {
   running: false,
   connectedClients: [],
 };
-const eventStreams = new Set();
-let dliveProvider = {
+const eventStreams = new Set<any>();
+let dliveProvider: any = {
   getStatus: () => ({
     connected: false,
     ip: null,
@@ -119,6 +119,7 @@ function normalizeProfile(profile, index) {
     slot: `Mic ${index + 1}`,
     label: `Mic ${index + 1}`,
     auxBus: index + 1,
+    allowedChannels: [],
   };
 
   return {
@@ -313,6 +314,9 @@ function startServer(port = 3000) {
 
   // Serve admin UI
   app.use('/admin', express.static(path.join(__dirname, 'ui')));
+
+  // Serve shared browser modules
+  app.use('/shared', express.static(path.join(__dirname, 'shared')));
 
   // ── API Routes ─────────────────────────────────────────────
 
@@ -694,3 +698,4 @@ module.exports = {
   saveSettings,
   getDefaultSettings,
 };
+export {};

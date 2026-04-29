@@ -2,10 +2,12 @@
   "name": "vocalmix-server",
   "version": "1.0.0",
   "description": "VocalMix – Personal monitor mix server for Allen & Heath dLive",
-  "main": "main.js",
+  "main": "dist/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev"
+    "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json && mkdir -p dist/client dist/ui && cp client/index.html client/styles.css dist/client/ && cp ui/index.html dist/ui/ && printf '{\"type\":\"module\"}\\n' > dist/client/package.json && printf '{\"type\":\"module\"}\\n' > dist/ui/package.json",
+    "start": "npm run build && electron dist/main.js",
+    "dev": "npm run build && electron dist/main.js --dev",
+    "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {
     "electron": "^28.0.0",
@@ -14,5 +16,10 @@
     "cors": "^2.8.5",
     "better-sqlite3": "^9.4.3"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3"
+  }
 }

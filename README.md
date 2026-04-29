@@ -16,15 +16,21 @@ Personal monitor mix server for Allen & Heath dLive. Lets singers open any iPad,
 
 ```
 vocalmix-server/
-├── main.js            # Electron main process (tray icon, window)
-├── preload.js         # Secure IPC bridge
-├── server.js          # Express HTTP server + Bonjour
-├── dlive.js           # dLive MixRack TCP/MIDI connection
+├── main.ts            # Electron main process (tray icon, window)
+├── preload.ts         # Secure IPC bridge
+├── server.ts          # Express HTTP server + Bonjour
+├── dlive.ts           # dLive MixRack TCP/MIDI connection
+├── shared/
+│   └── level-scale.ts # Shared dLive level conversion utilities
 ├── package.json
+├── tsconfig.node.json
+├── tsconfig.web.json
 ├── ui/
-│   └── index.html     # Admin dashboard (runs in Electron window)
+│   ├── index.html     # Admin dashboard shell
+│   └── dashboard.ts   # Admin dashboard logic
 └── client/
-    └── index.html     # iPad mic-slot interface (served via HTTP)
+    ├── index.html     # iPad mic-slot interface shell
+    └── *.ts           # Browser client modules
 ```
 
 ## Setup
@@ -52,6 +58,12 @@ This will:
 2. Show the tray icon in your menu bar
 3. Start the HTTP server on port 3000
 4. Advertise via Bonjour as "VocalMix Server"
+
+To run the test suite:
+
+```bash
+npm test
+```
 
 ### iPad access
 
@@ -87,7 +99,7 @@ The server connects to the dLive MixRack via TCP on port 51325. It:
 - Sends MIDI NRPN messages for fader changes
 - Listens for changes made at the surface and updates iPads in real-time
 
-**Note:** The current release includes simulated dLive data for development. The `dlive.js` module has the connection framework — the specific protocol bytes need to be implemented based on the A&H MIDI specification or protocol analysis. The simulated data lets you test the full UI flow without a real console.
+**Note:** The current release includes simulated dLive data for development. The `dlive.ts` module has the connection framework — the specific protocol bytes need to be implemented based on the A&H MIDI specification or protocol analysis. The simulated data lets you test the full UI flow without a real console.
 
 ## Building for production
 

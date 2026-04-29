@@ -6,3 +6,4 @@ contextBridge.exposeInMainWorld('vocalmix', {
   connectDLive: (ip) => ipcRenderer.invoke('connect-dlive', ip),
   disconnectDLive: () => ipcRenderer.invoke('disconnect-dlive'),
 });
+export {};

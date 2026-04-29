@@ -50,7 +50,7 @@ function createWindow() {
     show: false,
   });
 
-  mainWindow.loadFile('ui/index.html');
+  mainWindow.loadFile(path.join(__dirname, 'ui', 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -184,3 +184,4 @@ app.on('window-all-closed', (e) => {
   // Don't quit when window closes — keep running in tray
   e.preventDefault();
 });
+export {};

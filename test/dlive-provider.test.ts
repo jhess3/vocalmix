@@ -34,3 +34,4 @@ test('createDLiveProvider forwards live send operations to the dLive connection'
     { type: 'set', inputChannel: 12, auxBus: 7, level: 0.84 },
   ]);
 });
+export {};

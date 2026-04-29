@@ -556,3 +556,4 @@ class DLiveConnection extends EventEmitter {
 }
 
 module.exports = { DLiveConnection };
+export {};
