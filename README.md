@@ -1,6 +1,6 @@
 # VocalMix Server
 
-Personal monitor mix server for Allen & Heath dLive. Lets vocalists log into any iPad and control their own monitor mix — identity follows the person, not the device.
+Personal monitor mix server for Allen & Heath dLive. Lets singers open any iPad, choose a live `Mic 1-8` slot, adjust that aux mix in real time, and recall saved mixes from the server.
 
 ## Architecture
 
@@ -24,7 +24,7 @@ vocalmix-server/
 ├── ui/
 │   └── index.html     # Admin dashboard (runs in Electron window)
 └── client/
-    └── index.html     # iPad vocalist interface (served via HTTP)
+    └── index.html     # iPad mic-slot interface (served via HTTP)
 ```
 
 ## Setup
@@ -58,7 +58,7 @@ This will:
 On any iPad connected to the same network:
 1. Open Safari
 2. Go to `http://vocalmix.local:3000`
-3. Tap a vocalist name
+3. Tap a mic slot
 4. Mix!
 
 Or use the Mac's IP directly: `http://192.168.x.x:3000`
@@ -67,16 +67,18 @@ Or use the Mac's IP directly: `http://192.168.x.x:3000`
 
 ### For the sound engineer (Mac dashboard)
 
-1. **Profiles tab** — Assign names to Vox 1–8 slots and pick which aux bus each vocalist controls
-2. **Channel Matrix tab** — Click/drag to choose which input channels each vocalist can see. Channel names are pulled from the dLive automatically.
+1. **Mic Slots tab** — Configure `Mic 1-8` labels and pick which aux bus each slot controls
+2. **Channel Matrix tab** — Click/drag to choose which input channels each mic slot can see. Channel names are pulled from the dLive automatically.
 3. **Settings tab** — Configure dLive IP, server name, fader limits
 
-### For vocalists (iPad)
+### For singers (iPad)
 
 1. Open the web app on any iPad
-2. Tap their name
-3. See only the faders they're allowed to control
-4. Fader positions auto-save — next week they pick up right where they left off
+2. Tap `Mic 1-8`
+3. Start from the current live aux levels for that slot
+4. Recall a previously saved mix if desired
+5. Adjust faders live on the selected aux
+6. Save to overwrite the currently loaded mix, or create a new saved mix first
 
 ### dLive connection
 
@@ -107,7 +109,8 @@ To start VocalMix automatically when you log in:
 ## Configuration
 
 Settings are stored in `~/.vocalmix/`:
-- `profiles.json` — Vocalist profiles
+- `profiles.json` — Mic slot definitions
+- `saved-mixes.json` — Recallable saved mixes
 - `matrix.json` — Channel access matrix  
 - `settings.json` — Server and dLive settings
 

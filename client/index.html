@@ -4,8 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="VocalMix">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#07131a">
+  <meta name="theme-color" content="#07131a" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#07131a" media="(prefers-color-scheme: dark)">
   <title>VocalMix</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
@@ -13,23 +17,64 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg: #0a0a0c;
-      --surface: rgba(255,255,255,0.04);
-      --border: rgba(255,255,255,0.08);
+      color-scheme: dark;
+      --bg: #07131a;
+      --bg-2: #0f2530;
+      --surface: rgba(255,255,255,0.06);
+      --surface-strong: rgba(10, 24, 31, 0.82);
+      --border: rgba(170,223,255,0.14);
+      --text-dim: rgba(231, 245, 255, 0.64);
+      --text-muted: rgba(231, 245, 255, 0.38);
       --accent: #E85D4A;
       --green: #34C759;
+      --gold: #f3c969;
+    }
+
+    html {
+      height: 100%;
+      background-color: var(--bg);
     }
 
     html, body {
       height: 100%;
       overflow: hidden;
-      background: var(--bg);
+      background-color: var(--bg);
+      background:
+        radial-gradient(circle at top left, rgba(232,93,74,0.18), transparent 28%),
+        radial-gradient(circle at top right, rgba(74,158,232,0.22), transparent 34%),
+        linear-gradient(180deg, var(--bg-2), var(--bg));
       color: white;
       font-family: 'DM Sans', -apple-system, sans-serif;
       touch-action: none;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
+    }
+
+    body {
+      min-height: 100dvh;
+      position: relative;
+    }
+
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      pointer-events: none;
+      background: #07131a;
+    }
+
+    body::before {
+      top: 0;
+      height: env(safe-area-inset-top);
+    }
+
+    body::after {
+      bottom: 0;
+      height: env(safe-area-inset-bottom);
     }
 
     /* ═══ LOGIN SCREEN ═══ */
@@ -98,42 +143,89 @@
       height: 100%;
       display: none;
       flex-direction: column;
+      position: relative;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,0.08), transparent 24%),
+        linear-gradient(180deg, rgba(255,255,255,0.02), transparent 18%);
     }
 
     /* Top bar */
     .mixer-top {
-      padding: 12px 20px;
+      padding: 14px 16px 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: linear-gradient(180deg, rgba(3,10,13,0.94), rgba(3,10,13,0.72));
+      backdrop-filter: blur(20px);
     }
     .mixer-user {
       display: flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
     }
     .mixer-avatar {
-      width: 34px; height: 34px;
-      border-radius: 10px;
+      width: 40px; height: 40px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 700;
       font-size: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
-    .mixer-name { font-size: 15px; font-weight: 600; }
-    .mixer-aux { font-size: 12px; color: rgba(255,255,255,0.4); }
+    .mixer-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mixer-aux { font-size: 12px; color: var(--text-dim); }
+    .mixer-loaded {
+      font-size: 11px;
+      color: var(--gold);
+      margin-top: 2px;
+    }
+    .mixer-stats {
+      margin-left: auto;
+      padding: 8px 10px;
+      border: 1px solid rgba(243,201,105,0.18);
+      border-radius: 12px;
+      background: rgba(243,201,105,0.08);
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255,245,214,0.92);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
     .btn-logout {
-      background: rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.08);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 14px;
-      color: rgba(255,255,255,0.5);
+      border-radius: 10px;
+      padding: 9px 12px;
+      color: rgba(255,255,255,0.76);
       font-family: inherit;
       font-size: 12px;
+      font-weight: 600;
       cursor: pointer;
+      flex-shrink: 0;
+    }
+    .mixer-hint {
+      padding: 0 16px 10px;
+      font-size: 11px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      flex-shrink: 0;
     }
 
     /* Fader area */
@@ -142,9 +234,16 @@
       display: flex;
       overflow-x: auto;
       overflow-y: hidden;
-      padding: 16px 10px;
-      gap: 6px;
+      padding: 10px 14px 18px;
+      gap: 10px;
       align-items: stretch;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+    }
+    .fader-area::-webkit-scrollbar {
+      display: none;
     }
 
     /* Individual fader strip */
@@ -152,59 +251,79 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      min-width: 72px;
+      width: 58px;
       flex-shrink: 0;
-      background: var(--surface);
-      border-radius: 12px;
-      padding: 12px 8px 14px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03)),
+        rgba(4, 17, 22, 0.78);
+      border-radius: 18px;
+      padding: 12px 8px 12px;
       border: 1px solid var(--border);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.22);
+      scroll-snap-align: start;
+      position: relative;
+    }
+    .fader-strip::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), transparent 34%);
+      pointer-events: none;
     }
     .fader-label {
       font-size: 10px;
-      font-weight: 600;
-      color: rgba(255,255,255,0.5);
-      margin-bottom: 4px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.82);
+      margin-bottom: 5px;
       text-align: center;
       width: 100%;
-      white-space: nowrap;
+      line-height: 1.08;
+      min-height: 22px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
     .fader-ch {
       font-size: 9px;
-      color: rgba(255,255,255,0.2);
-      margin-bottom: 10px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
     }
 
     /* Vertical fader */
     .fader-track {
       position: relative;
-      width: 8px;
+      width: 12px;
       flex: 1;
-      background: rgba(255,255,255,0.08);
-      border-radius: 4px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
+      border-radius: 999px;
       margin: 0 auto;
-      min-height: 200px;
+      min-height: 250px;
       cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
     }
     .fader-fill {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      border-radius: 4px;
+      border-radius: 999px;
       transition: height 0.05s;
     }
     .fader-thumb {
       position: absolute;
       left: 50%;
       transform: translate(-50%, 50%);
-      width: 40px;
-      height: 22px;
-      background: white;
-      border-radius: 6px;
+      width: 36px;
+      height: 18px;
+      background: linear-gradient(180deg, #ffffff, #d6eef6);
+      border-radius: 999px;
       cursor: grab;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.34);
       transition: bottom 0.05s;
     }
     .fader-thumb:active {
@@ -214,22 +333,23 @@
 
     .fader-db {
       font-size: 11px;
-      font-weight: 600;
-      margin-top: 10px;
-      color: rgba(255,255,255,0.6);
+      font-weight: 700;
+      margin-top: 12px;
+      color: rgba(255,255,255,0.74);
       font-variant-numeric: tabular-nums;
     }
 
     .fader-mute {
-      width: 44px;
-      height: 28px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.04);
-      color: rgba(255,255,255,0.4);
+      width: 42px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.55);
       font-family: inherit;
       font-size: 10px;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: 0.05em;
       cursor: pointer;
       margin-top: 8px;
       transition: all 0.1s;
@@ -242,30 +362,137 @@
 
     /* Preset bar */
     .preset-bar {
-      padding: 10px 16px;
+      padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
       border-top: 1px solid var(--border);
       display: flex;
       gap: 8px;
       align-items: center;
       flex-shrink: 0;
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
+      background: linear-gradient(180deg, rgba(6,16,20,0.76), rgba(6,16,20,0.96));
+      backdrop-filter: blur(20px);
+      overflow-x: auto;
     }
     .preset-btn {
-      background: rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.07);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 16px;
-      color: rgba(255,255,255,0.5);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: rgba(255,255,255,0.76);
       font-family: inherit;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 700;
       cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .preset-btn:active { background: rgba(255,255,255,0.1); }
     .preset-btn.save-btn {
       margin-left: auto;
-      background: rgba(52,199,89,0.15);
-      border-color: rgba(52,199,89,0.3);
-      color: var(--green);
+      background: linear-gradient(180deg, rgba(52,199,89,0.28), rgba(52,199,89,0.14));
+      border-color: rgba(52,199,89,0.4);
+      color: #d5ffe0;
+    }
+    .preset-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .mix-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: flex-end;
+      z-index: 20;
+    }
+    .mix-modal.open { display: flex; }
+    .mix-sheet {
+      width: 100%;
+      max-height: 72vh;
+      background: #111216;
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-bottom: none;
+      padding: 18px 16px 24px;
+      overflow-y: auto;
+    }
+    .mix-sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .mix-sheet-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .mix-sheet-sub {
+      font-size: 12px;
+      color: rgba(255,255,255,0.45);
+      margin-top: 2px;
+    }
+    .mix-close {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: white;
+      font-size: 16px;
+    }
+    .mix-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .mix-item {
+      width: 100%;
+      text-align: left;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: white;
+      padding: 12px 14px;
+      font-family: inherit;
+    }
+    .mix-item-name {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .mix-item-meta {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      margin-top: 4px;
+    }
+    .mix-empty {
+      padding: 18px 4px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+    }
+
+    @media (min-width: 700px) {
+      .mixer-top {
+        padding-left: 22px;
+        padding-right: 22px;
+      }
+      .mixer-hint {
+        padding-left: 22px;
+        padding-right: 22px;
+      }
+      .fader-area {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      .fader-strip {
+        width: 66px;
+      }
+      .fader-track {
+        min-height: 300px;
+      }
     }
   </style>
 </head>
@@ -274,7 +501,7 @@
   <!-- ═══ LOGIN ═══ -->
   <div class="login-screen" id="loginScreen">
     <div class="login-logo">VocalMix</div>
-    <div class="login-sub">Tap your name to load your mix</div>
+    <div class="login-sub">Tap your mic slot to open its live mix</div>
     <div class="login-grid" id="loginGrid">
       <!-- Populated by JS -->
     </div>
@@ -286,25 +513,58 @@
       <div class="mixer-user">
         <div class="mixer-avatar" id="mixerAvatar">1</div>
         <div>
-          <div class="mixer-name" id="mixerName">Sarah M.</div>
-          <div class="mixer-aux" id="mixerAux">Aux 1 · Vox 1</div>
+          <div class="mixer-name" id="mixerName">Mic 1</div>
+          <div class="mixer-aux" id="mixerAux">Aux 1</div>
+          <div class="mixer-loaded" id="loadedMixLabel">Live mix only</div>
         </div>
       </div>
+      <div class="mixer-stats" id="mixerStats">0 channels</div>
       <button class="btn-logout" onclick="logout()">Switch User</button>
     </div>
+    <div class="mixer-hint" id="mixerHint">Stage deck ready</div>
 
     <div class="fader-area" id="faderArea">
       <!-- Populated by JS -->
     </div>
 
     <div class="preset-bar">
-      <button class="preset-btn" onclick="resetToSaved()">↺ Reset</button>
+      <button class="preset-btn" onclick="openRecallModal()">Recall Mix</button>
       <button class="preset-btn" onclick="allFadersUnity()">0 dB</button>
+      <button class="preset-btn" onclick="createMix()">+ New Mix</button>
       <button class="preset-btn save-btn" onclick="saveMix()">✓ Save Mix</button>
     </div>
   </div>
 
+  <div class="mix-modal" id="mixModal">
+    <div class="mix-sheet">
+      <div class="mix-sheet-header">
+        <div>
+          <div class="mix-sheet-title">Recall Mix</div>
+          <div class="mix-sheet-sub">Choose a saved mix to apply to this mic slot</div>
+        </div>
+        <button class="mix-close" onclick="closeRecallModal()">✕</button>
+      </div>
+      <div class="mix-list" id="mixList"></div>
+    </div>
+  </div>
+
   <script>
+    const DLIVE_DB_POINTS = [
+      { db: 10, midi: 127 },
+      { db: 5, midi: 117 },
+      { db: 0, midi: 107 },
+      { db: -5, midi: 97 },
+      { db: -10, midi: 87 },
+      { db: -15, midi: 77 },
+      { db: -20, midi: 67 },
+      { db: -25, midi: 57 },
+      { db: -30, midi: 47 },
+      { db: -35, midi: 37 },
+      { db: -40, midi: 27 },
+      { db: -45, midi: 17 },
+      { db: Number.NEGATIVE_INFINITY, midi: 0 },
+    ];
+
     // ═══════════════════════════════════════════════════════════
     // SERVER DISCOVERY
     // ═══════════════════════════════════════════════════════════
@@ -321,8 +581,12 @@
     let allowedChannels = [];
     let faderLevels = {};  // { ch: 0.0-1.0 }
     let mutedChannels = new Set();
-    let savedLevels = {};
     let activeTouches = {};  // { touchId: { ch, startY, startLevel } }
+    let savedMixes = [];
+    let currentLoadedMixId = null;
+    let currentLoadedMixName = '';
+    let faderSendTimers = {};
+    let liveEventSource = null;
 
     let channels = [];
     let profiles = [];
@@ -345,6 +609,103 @@
       return aux.name;
     }
 
+    function clampMidiValue(value) {
+      return Math.max(0, Math.min(127, Math.round(Number(value) || 0)));
+    }
+
+    function levelToMidiValue(level) {
+      return clampMidiValue((Number(level) || 0) * 127);
+    }
+
+    function midiValueToLevel(midiValue) {
+      return clampMidiValue(midiValue) / 127;
+    }
+
+    function midiValueToDb(midiValue) {
+      const value = clampMidiValue(midiValue);
+      if (value === 0) return Number.NEGATIVE_INFINITY;
+
+      for (let index = 0; index < DLIVE_DB_POINTS.length - 1; index += 1) {
+        const current = DLIVE_DB_POINTS[index];
+        const next = DLIVE_DB_POINTS[index + 1];
+        if (value <= current.midi && value >= next.midi) {
+          if (!Number.isFinite(next.db)) {
+            const ratio = (value - next.midi) / (current.midi - next.midi);
+            return -90 + (ratio * (current.db + 90));
+          }
+
+          const ratio = (value - next.midi) / (current.midi - next.midi);
+          return next.db + (ratio * (current.db - next.db));
+        }
+      }
+
+      return Number.NEGATIVE_INFINITY;
+    }
+
+    function dbToMidiValue(db) {
+      if (!Number.isFinite(db)) return 0;
+      if (db >= DLIVE_DB_POINTS[0].db) return DLIVE_DB_POINTS[0].midi;
+
+      for (let index = 0; index < DLIVE_DB_POINTS.length - 1; index += 1) {
+        const current = DLIVE_DB_POINTS[index];
+        const next = DLIVE_DB_POINTS[index + 1];
+        if (!Number.isFinite(next.db)) continue;
+        if (db <= current.db && db >= next.db) {
+          const ratio = (db - next.db) / (current.db - next.db);
+          return clampMidiValue(next.midi + (ratio * (current.midi - next.midi)));
+        }
+      }
+
+      return 0;
+    }
+
+    function dbToLevel(db) {
+      return midiValueToLevel(dbToMidiValue(db));
+    }
+
+    function ensureLiveEventStream() {
+      if (liveEventSource) return;
+
+      liveEventSource = new EventSource('/api/events');
+      liveEventSource.addEventListener('aux-send-level', (event) => {
+        if (!currentProfile) return;
+
+        let payload;
+        try {
+          payload = JSON.parse(event.data);
+        } catch (error) {
+          return;
+        }
+
+        const auxBus = Number(payload?.auxBus);
+        const inputChannel = Number(payload?.inputChannel);
+        const level = Number(payload?.level);
+        if (
+          auxBus !== Number(currentProfile.auxBus) ||
+          !allowedChannels.includes(inputChannel) ||
+          !Number.isFinite(level)
+        ) {
+          return;
+        }
+
+        setFaderLevel(inputChannel, level, { skipLiveSend: true });
+      });
+
+      liveEventSource.onerror = () => {
+        if (liveEventSource?.readyState === EventSource.CLOSED) {
+          liveEventSource.close();
+          liveEventSource = null;
+          setTimeout(() => ensureLiveEventStream(), 2000);
+        }
+      };
+    }
+
+    function closeLiveEventStream() {
+      if (!liveEventSource) return;
+      liveEventSource.close();
+      liveEventSource = null;
+    }
+
     // ═══════════════════════════════════════════════════════════
     // LOGIN
     // ═══════════════════════════════════════════════════════════
@@ -352,7 +713,7 @@
     function renderLogin() {
       const grid = document.getElementById('loginGrid');
       grid.innerHTML = profiles.map(p => {
-        const label = p.name || p.slot;
+        const label = p.slot || `Mic ${p.id}`;
         return `
           <div class="login-btn" style="background:linear-gradient(145deg,${p.color}25,${p.color}10);border-color:${p.color}40"
                onclick="login(${p.id})">
@@ -365,18 +726,21 @@
 
     async function login(profileId) {
       try {
-        channels = await fetchJSON('/api/channels');
         const data = await fetchJSON('/api/login', {
           method: 'POST',
-          body: JSON.stringify({ profileId }),
+          body: JSON.stringify({ slotId: profileId, profileId }),
         });
 
-        currentProfile = data.profile;
+        channels = await fetchJSON('/api/channels');
+        currentProfile = data.slot || data.profile;
         if (!currentProfile) return;
 
         allowedChannels = data.allowedChannels || [];
-        savedLevels = data.savedLevels || {};
         faderLevels = {};
+        mutedChannels = new Set();
+        savedMixes = Array.isArray(data.savedMixes) ? data.savedMixes : [];
+        currentLoadedMixId = null;
+        currentLoadedMixName = '';
 
         let liveLevels = {};
         if (allowedChannels.length) {
@@ -399,7 +763,7 @@
             faderLevels[ch] = liveLevels[ch];
             return;
           }
-          faderLevels[ch] = savedLevels[ch] || 0.7;
+          faderLevels[ch] = 0.7;
         });
 
         document.getElementById('loginScreen').style.display = 'none';
@@ -408,10 +772,11 @@
         document.getElementById('mixerAvatar').textContent = currentProfile.id;
         document.getElementById('mixerAvatar').style.background =
           `linear-gradient(135deg,${currentProfile.color},${currentProfile.color}99)`;
-        document.getElementById('mixerName').textContent = currentProfile.name || currentProfile.slot;
-        document.getElementById('mixerAux').textContent =
-          `${getAuxLabel(currentProfile.auxBus)} · ${currentProfile.slot}`;
+        document.getElementById('mixerName').textContent = currentProfile.slot || `Mic ${currentProfile.id}`;
+        document.getElementById('mixerAux').textContent = getAuxLabel(currentProfile.auxBus);
 
+        updateLoadedMixUI();
+        ensureLiveEventStream();
         renderFaders();
       } catch (error) {
         console.error('Login failed:', error);
@@ -419,7 +784,17 @@
     }
 
     function logout() {
+      if (currentProfile) {
+        fetchJSON('/api/logout', {
+          method: 'POST',
+          body: JSON.stringify({ slotId: currentProfile.id }),
+        }).catch((error) => console.error('Logout failed:', error));
+      }
       currentProfile = null;
+      currentLoadedMixId = null;
+      currentLoadedMixName = '';
+      closeLiveEventStream();
+      closeRecallModal();
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('mixerScreen').style.display = 'none';
     }
@@ -429,9 +804,8 @@
     // ═══════════════════════════════════════════════════════════
 
     function levelToDb(level) {
-      if (level <= 0) return '-∞';
-      // Map 0-1 to -60 to +6 dB (approximate)
-      const db = (level * 66) - 60;
+      const db = midiValueToDb(levelToMidiValue(level));
+      if (!Number.isFinite(db)) return '-∞';
       if (db > 0) return `+${db.toFixed(1)}`;
       return db.toFixed(1);
     }
@@ -439,6 +813,10 @@
     function renderFaders() {
       const area = document.getElementById('faderArea');
       const visibleChannels = channels.filter(c => allowedChannels.includes(c.ch));
+      document.getElementById('mixerStats').textContent = `${visibleChannels.length} channels`;
+      document.getElementById('mixerHint').textContent = visibleChannels.length > 10
+        ? 'Swipe sideways for the full mix'
+        : 'Drag faders to shape the mix';
 
       if (!visibleChannels.length) {
         area.innerHTML = '<div style="padding:24px;color:rgba(255,255,255,0.45);font-size:14px">No live dLive channel names are available for this profile.</div>';
@@ -478,7 +856,7 @@
       });
     }
 
-    function setFaderLevel(ch, level) {
+    function setFaderLevel(ch, level, options = {}) {
       level = Math.max(0, Math.min(1, level));
       faderLevels[ch] = level;
 
@@ -494,9 +872,9 @@
       fill.style.height = `${pct}%`;
       thumb.style.bottom = `${pct}%`;
       db.textContent = levelToDb(level);
-
-      // In production: send MIDI command to dLive via server
-      // fetch(`${SERVER}/api/fader`, { method: 'POST', body: JSON.stringify({ ch, level, aux: currentProfile.auxBus }) });
+      if (!options.skipLiveSend) {
+        sendLiveFaderLevel(ch, level);
+      }
     }
 
     function toggleMute(ch) {
@@ -535,8 +913,6 @@
       for (const touch of e.changedTouches) {
         delete activeTouches[touch.identifier];
       }
-      // Auto-save levels after touch ends
-      autoSave();
     }
 
     // Mouse fallback
@@ -553,7 +929,6 @@
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        autoSave();
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
@@ -566,37 +941,149 @@
     // PRESET ACTIONS
     // ═══════════════════════════════════════════════════════════
 
-    function resetToSaved() {
-      Object.entries(savedLevels).forEach(([ch, level]) => {
-        setFaderLevel(parseInt(ch), level);
-      });
-    }
-
     function allFadersUnity() {
-      // Unity (0 dB) is at ~0.91 in our 0-1 mapping
-      const unity = 60 / 66; // ~0.909
+      const unity = dbToLevel(0);
       allowedChannels.forEach(ch => setFaderLevel(ch, unity));
     }
 
-    function saveMix() {
-      savedLevels = { ...faderLevels };
-      fetchJSON('/api/save-levels', {
-        method: 'POST',
-        body: JSON.stringify({ profileId: currentProfile.id, levels: savedLevels }),
-      }).catch((error) => console.error('Save failed:', error));
-      // Flash feedback
+    function updateLoadedMixUI() {
+      const label = document.getElementById('loadedMixLabel');
+      const saveBtn = document.querySelector('.save-btn');
+      if (currentLoadedMixId && currentLoadedMixName) {
+        label.textContent = `Loaded mix: ${currentLoadedMixName}`;
+        saveBtn.disabled = false;
+        return;
+      }
+
+      label.textContent = 'Live mix only';
+      saveBtn.disabled = true;
+    }
+
+    function syncLocalMixCache(updatedMix) {
+      const idx = savedMixes.findIndex((mix) => mix.id === updatedMix.id);
+      if (idx === -1) {
+        savedMixes.unshift(updatedMix);
+      } else {
+        savedMixes[idx] = updatedMix;
+      }
+    }
+
+    async function refreshSavedMixes() {
+      savedMixes = await fetchJSON('/api/saved-mixes');
+      renderRecallList();
+    }
+
+    function renderRecallList() {
+      const list = document.getElementById('mixList');
+      if (!savedMixes.length) {
+        list.innerHTML = '<div class="mix-empty">No saved mixes yet. Create one from the current live mix first.</div>';
+        return;
+      }
+
+      list.innerHTML = savedMixes.map((mix) => {
+        const updated = mix.updatedAt ? new Date(mix.updatedAt).toLocaleString() : 'Unknown';
+        const channelCount = Object.keys(mix.levels || {}).length;
+        return `
+          <button class="mix-item" onclick="recallMix('${mix.id}')">
+            <div class="mix-item-name">${mix.name}</div>
+            <div class="mix-item-meta">${channelCount} channels · Updated ${updated}</div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    async function openRecallModal() {
+      if (!currentProfile) return;
+      await refreshSavedMixes();
+      document.getElementById('mixModal').classList.add('open');
+    }
+
+    function closeRecallModal() {
+      document.getElementById('mixModal').classList.remove('open');
+    }
+
+    async function recallMix(mixId) {
+      try {
+        const response = await fetchJSON('/api/recall-mix', {
+          method: 'POST',
+          body: JSON.stringify({ slotId: currentProfile.id, mixId }),
+        });
+
+        const appliedMix = response.mix || savedMixes.find((mix) => mix.id === mixId);
+        const appliedLevels = response.levels || (appliedMix ? appliedMix.levels : {}) || {};
+
+        allowedChannels.forEach((ch) => {
+          if (Object.prototype.hasOwnProperty.call(appliedLevels, ch)) {
+            setFaderLevel(ch, appliedLevels[ch], { skipLiveSend: true });
+          } else {
+            setFaderLevel(ch, 0, { skipLiveSend: true });
+          }
+        });
+
+        if (appliedMix) {
+          currentLoadedMixId = appliedMix.id;
+          currentLoadedMixName = appliedMix.name;
+          syncLocalMixCache(appliedMix);
+        }
+
+        updateLoadedMixUI();
+        closeRecallModal();
+      } catch (error) {
+        console.error('Recall failed:', error);
+      }
+    }
+
+    async function createMix() {
+      const name = window.prompt('Name this mix');
+      if (!name || !name.trim()) return;
+
+      try {
+        const mix = await fetchJSON('/api/saved-mixes', {
+          method: 'POST',
+          body: JSON.stringify({ name: name.trim(), levels: { ...faderLevels } }),
+        });
+        syncLocalMixCache(mix);
+        currentLoadedMixId = mix.id;
+        currentLoadedMixName = mix.name;
+        updateLoadedMixUI();
+      } catch (error) {
+        console.error('Create mix failed:', error);
+      }
+    }
+
+    async function saveMix() {
+      if (!currentLoadedMixId) return;
+
+      try {
+        const updatedMix = await fetchJSON(`/api/saved-mixes/${encodeURIComponent(currentLoadedMixId)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ levels: { ...faderLevels } }),
+        });
+        syncLocalMixCache(updatedMix);
+      } catch (error) {
+        console.error('Save failed:', error);
+        return;
+      }
+
       const btn = document.querySelector('.save-btn');
       btn.textContent = '✓ Saved!';
       setTimeout(() => { btn.textContent = '✓ Save Mix'; }, 1500);
     }
 
-    let saveTimeout = null;
-    function autoSave() {
-      clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(() => {
-        // In production: POST levels to server
-        console.log('Auto-saved levels:', faderLevels);
-      }, 2000);
+    function sendLiveFaderLevel(ch, level) {
+      if (!currentProfile) return;
+
+      clearTimeout(faderSendTimers[ch]);
+      faderSendTimers[ch] = setTimeout(() => {
+        fetchJSON('/api/fader-level', {
+          method: 'POST',
+          body: JSON.stringify({
+            slotId: currentProfile.id,
+            inputChannel: ch,
+            level,
+          }),
+        }).catch((error) => console.error('Live level send failed:', error));
+      }, 25);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -616,6 +1103,8 @@
         console.error('Failed to load initial data:', error);
       }
       renderLogin();
+      updateLoadedMixUI();
+      ensureLiveEventStream();
     }
 
     initClient();

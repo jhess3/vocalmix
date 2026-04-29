@@ -116,6 +116,39 @@ class DLiveConnection extends EventEmitter {
     return { success: true, levels };
   }
 
+  async applyAuxSendLevels(auxBus, levels) {
+    if (!this._connected || !this._socket) {
+      return { success: false, error: 'Not connected' };
+    }
+
+    const normalizedAuxBus = Number(auxBus);
+    if (!this._getAuxTarget(normalizedAuxBus)) {
+      return { success: false, error: `Unsupported aux bus: ${auxBus}` };
+    }
+
+    const normalizedLevels = {};
+    Object.entries(levels || {}).forEach(([inputCh, level]) => {
+      const normalizedInputCh = Number(inputCh);
+      const normalizedLevel = Number(level);
+      if (
+        Number.isInteger(normalizedInputCh) &&
+        normalizedInputCh >= 1 &&
+        normalizedInputCh <= INPUT_CHANNEL_COUNT &&
+        Number.isFinite(normalizedLevel) &&
+        normalizedLevel >= 0 &&
+        normalizedLevel <= 1
+      ) {
+        normalizedLevels[String(normalizedInputCh)] = normalizedLevel;
+      }
+    });
+
+    Object.entries(normalizedLevels).forEach(([inputCh, level]) => {
+      this.setAuxSendLevel(Number(inputCh), normalizedAuxBus, level);
+    });
+
+    return { success: true, auxBus: normalizedAuxBus, levels: normalizedLevels };
+  }
+
   /**
    * Connect to a dLive MixRack at the given IP
    */
@@ -391,14 +424,21 @@ class DLiveConnection extends EventEmitter {
       const inputCh = (message[10] & 0x7F) + 1;
       const auxBus = this._getAuxBusFromTarget(message[11] & 0x0F, message[12] & 0x7F);
       if (!auxBus) return;
+      const level = (message[13] & 0x7F) / 127;
 
       const key = `${auxBus}:${inputCh}`;
       const pending = this._pendingSendLevelRequests.get(key);
-      if (!pending) return;
+      if (pending) {
+        clearTimeout(pending.timeoutId);
+        this._pendingSendLevelRequests.delete(key);
+        pending.resolve(level);
+      }
 
-      clearTimeout(pending.timeoutId);
-      this._pendingSendLevelRequests.delete(key);
-      pending.resolve((message[13] & 0x7F) / 127);
+      this.emit('aux-send-level', {
+        auxBus,
+        inputChannel: inputCh,
+        level,
+      });
     }
   }
 
@@ -439,45 +479,38 @@ class DLiveConnection extends EventEmitter {
    * @param {number} level - Fader level 0.0 to 1.0
    */
   setAuxSendLevel(inputCh, auxBus, level) {
-    if (!this._connected || !this._socket) return;
+    if (!this._connected || !this._socket) return false;
+    const normalizedInputCh = Number(inputCh);
+    const normalizedLevel = Number(level);
+    const target = this._getAuxTarget(auxBus);
+    if (
+      !Number.isInteger(normalizedInputCh) ||
+      normalizedInputCh < 1 ||
+      normalizedInputCh > INPUT_CHANNEL_COUNT ||
+      !target ||
+      !Number.isFinite(normalizedLevel)
+    ) {
+      return false;
+    }
 
-    // Convert to MIDI NRPN message
-    // dLive uses NRPN for fader control:
-    //   - NRPN MSB (CC 99): Parameter group
-    //   - NRPN LSB (CC 98): Parameter index
-    //   - Data Entry MSB (CC 6): Value high byte
-    //   - Data Entry LSB (CC 38): Value low byte
-    //
-    // For aux sends:
-    //   Bank = floor((inputCh - 1) / 12)
-    //   MIDI Channel = function of aux bus
-    //   CC for fader = function of (inputCh - 1) % 12
-
-    const bank = Math.floor((inputCh - 1) / MIDI_BANK_SIZE);
-    const channelInBank = (inputCh - 1) % MIDI_BANK_SIZE;
-
-    // Convert 0.0-1.0 to 14-bit MIDI value (0-16383)
-    const midiValue = Math.round(level * 16383);
-    const msb = (midiValue >> 7) & 0x7F;
-    const lsb = midiValue & 0x7F;
-
-    // Build the MIDI TCP message
-    // NOTE: Actual byte format depends on dLive's TCP MIDI wrapper
+    const sendLevel = Math.max(0, Math.min(127, Math.round(normalizedLevel * 127)));
     const msg = Buffer.from([
-      0xB0 | (auxBus - 1) & 0x0F, // CC on aux channel
-      0x63, bank,                   // NRPN MSB
-      0xB0 | (auxBus - 1) & 0x0F,
-      0x62, channelInBank,          // NRPN LSB
-      0xB0 | (auxBus - 1) & 0x0F,
-      0x06, msb,                    // Data Entry MSB
-      0xB0 | (auxBus - 1) & 0x0F,
-      0x26, lsb,                    // Data Entry LSB
+      ...SYSEX_HEADER,
+      INPUT_MIDI_BASE_CHANNEL & 0x0F,
+      0x0D,
+      (normalizedInputCh - 1) & 0x7F,
+      target.sndN & 0x0F,
+      target.sndCH & 0x7F,
+      sendLevel & 0x7F,
+      0xF7,
     ]);
 
     try {
       this._socket.write(msg);
+      return true;
     } catch (err) {
       console.error('[dLive] Failed to send:', err.message);
+      return false;
     }
   }
 

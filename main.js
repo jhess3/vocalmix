@@ -1,7 +1,8 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } = require('electron');
 const path = require('path');
-const { startServer, stopServer, getServerState, setDLiveProvider, loadSettings } = require('./server');
+const { startServer, stopServer, getServerState, setDLiveProvider, broadcastAuxSendLevel, loadSettings } = require('./server');
 const { DLiveConnection } = require('./dlive');
+const { createDLiveProvider } = require('./dlive-provider');
 
 let mainWindow = null;
 let tray = null;
@@ -149,21 +150,10 @@ app.whenReady().then(async () => {
 
   // Initialize dLive connection
   dlive = new DLiveConnection();
-  setDLiveProvider({
-    getStatus: () => ({
-      connected: dlive?.isConnected() || false,
-      ip: dlive?.getIP() || null,
-      channels: dlive?.getChannels() || [],
-      auxBuses: dlive?.getAuxBuses() || [],
-    }),
-    resync: () => dlive.refreshChannelNames(),
-    getAuxSendLevels: (inputChannels, auxBus) => dlive.getAuxSendLevels(inputChannels, auxBus),
-    connect: (ip) => dlive.connect(ip),
-    disconnect: () => {
-      dlive.disconnect();
-      return { success: true };
-    },
+  dlive.on('aux-send-level', (payload) => {
+    broadcastAuxSendLevel(payload);
   });
+  setDLiveProvider(createDLiveProvider(dlive));
 
   const settings = loadSettings();
   if (settings.autoConnect && settings.dliveIP) {

@@ -543,7 +543,7 @@
   <div class="main">
     <!-- Tabs -->
     <div class="tabs">
-      <button class="tab active" onclick="switchTab('profiles')">Profiles</button>
+      <button class="tab active" onclick="switchTab('profiles')">Mic Slots</button>
       <button class="tab" onclick="switchTab('matrix')">Channel Matrix</button>
       <button class="tab" onclick="switchTab('settings')">Settings</button>
     </div>
@@ -563,7 +563,7 @@
       <div class="status-card">
         <div class="label"><span class="status-dot" style="background:#E8A44A;box-shadow:0 0 6px #E8A44A40"></span> Connected</div>
         <div class="value" id="connectedCount">0 / 4</div>
-        <div class="sub">vocalists online</div>
+        <div class="sub">slots online</div>
       </div>
       <div class="status-card">
         <div class="label"><span class="status-dot" style="background:#4A9EE8;box-shadow:0 0 6px #4A9EE840"></span> Channels</div>
@@ -582,10 +582,10 @@
       <button class="action" onclick="resyncDLive()">Re-sync</button>
     </div>
 
-    <!-- ═══ PROFILES TAB ═══ -->
+    <!-- ═══ MIC SLOTS TAB ═══ -->
     <div id="tab-profiles">
       <div class="section-header">
-        <h2>Vocalist Profiles</h2>
+        <h2>Mic Slots</h2>
       </div>
       <div class="profiles-grid" id="profilesGrid">
         <!-- Populated by JS -->
@@ -655,7 +655,7 @@
         <div class="settings-row">
           <div>
             <div class="label">Minimum Level (dB)</div>
-            <div class="desc">Floor that vocalists can set a fader to</div>
+            <div class="desc">Floor that singers can set a fader to</div>
           </div>
           <input class="settings-input" id="faderMin" value="-60" style="width:80px">
         </div>
@@ -675,7 +675,7 @@
     <!-- Footer tip -->
     <div class="footer-tip">
       <span style="font-size:16px">💡</span>
-      <span>Vocalists connect by opening <code>vocalmix.local</code> on any iPad on the audio network. No app install needed.</span>
+      <span>Singers connect by opening <code>vocalmix.local</code> on any iPad on the audio network. No app install needed.</span>
     </div>
   </div>
 
@@ -685,15 +685,15 @@
       <div style="display:flex;align-items:center;gap:12px">
         <div class="profile-avatar" id="editAvatar" style="width:36px;height:36px;border-radius:10px;font-size:16px">1</div>
         <div>
-          <div style="font-size:15px;font-weight:600" id="editSlot">Vox 1</div>
-          <div style="font-size:12px;color:var(--text-muted)">Edit Profile</div>
+          <div style="font-size:15px;font-weight:600" id="editSlot">Mic 1</div>
+          <div style="font-size:12px;color:var(--text-muted)">Edit Slot</div>
         </div>
       </div>
       <button class="btn-close" onclick="closeEdit()">✕</button>
     </div>
     <div class="edit-body">
-      <div class="field-label">Display Name</div>
-      <input class="field-input" id="editName" placeholder="e.g. Sarah M.">
+      <div class="field-label">Slot Label</div>
+      <input class="field-input" id="editName" placeholder="e.g. Lead Vocal">
 
       <div class="field-label">Aux Bus Assignment</div>
       <div class="aux-grid" id="auxGrid">
@@ -702,8 +702,8 @@
 
       <div class="field-label">Quick Channel Presets</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
-        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('vocalist-basic')">Vocalist Basic</button>
-        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('vocalist-full')">Vocalist Full</button>
+        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('vocalist-basic')">Basic Vocal</button>
+        <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('vocalist-full')">Full Vocal</button>
         <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('all')">All Inputs</button>
         <button class="aux-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="applyPreset('clear')">Clear</button>
       </div>
@@ -732,14 +732,14 @@
     let channels = [];
 
     let auxBuses = [
-      { id: 1, name: 'Vox 1', color: '#E85D4A' },
-      { id: 2, name: 'Vox 2', color: '#E8A44A' },
-      { id: 3, name: 'Vox 3', color: '#4AE88D' },
-      { id: 4, name: 'Vox 4', color: '#4A9EE8' },
-      { id: 5, name: 'Vox 5', color: '#C77DFF' },
-      { id: 6, name: 'Vox 6', color: '#FF6B9D' },
-      { id: 7, name: 'Vox 7', color: '#00D4AA' },
-      { id: 8, name: 'Vox 8', color: '#E8A44A' },
+      { id: 1, name: 'Mic 1', color: '#E85D4A' },
+      { id: 2, name: 'Mic 2', color: '#E8A44A' },
+      { id: 3, name: 'Mic 3', color: '#4AE88D' },
+      { id: 4, name: 'Mic 4', color: '#4A9EE8' },
+      { id: 5, name: 'Mic 5', color: '#C77DFF' },
+      { id: 6, name: 'Mic 6', color: '#FF6B9D' },
+      { id: 7, name: 'Mic 7', color: '#00D4AA' },
+      { id: 8, name: 'Mic 8', color: '#E8A44A' },
       { id: 9, name: 'IEM MD', color: '#8B8B8B' },
       { id: 10, name: 'IEM Keys', color: '#C77DFF' },
       { id: 11, name: 'Wedge DS', color: '#4A9EE8' },
@@ -750,8 +750,8 @@
 
     let profiles = Array.from({ length: 8 }, (_, i) => ({
       id: i + 1,
-      slot: `Vox ${i + 1}`,
-      name: ['Sarah M.','James K.','Maria L.','David R.','','','',''][i],
+      slot: `Mic ${i + 1}`,
+      name: ['Lead Vocal','Harmony 1','Harmony 2','Spare','','','',''][i],
       auxBus: i + 1,
       color: PROFILE_COLORS[i],
       allowedChannels: [
@@ -940,6 +940,8 @@
     async function connectDLiveNow() {
       try {
         const nextSettings = readSettingsForm();
+        nextSettings.autoConnect = true;
+        document.getElementById('autoConnect').checked = true;
         await fetchJSON('/api/settings', {
           method: 'PUT',
           body: JSON.stringify(nextSettings),
