@@ -82,6 +82,25 @@ export function createApp(doc = document) {
       setFaderLevel(inputChannel, level, { skipLiveSend: true });
     });
 
+    state.liveEventSource.addEventListener('aux-master-level', (event) => {
+      if (!state.currentProfile) return;
+
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      const auxBus = Number(payload?.auxBus);
+      const level = Number(payload?.level);
+      if (auxBus !== Number(state.currentProfile.auxBus) || !Number.isFinite(level)) {
+        return;
+      }
+
+      setAuxMasterLevel(level, { skipLiveSend: true });
+    });
+
     state.liveEventSource.onerror = () => {
       if (state.liveEventSource?.readyState === EventSource.CLOSED) {
         state.liveEventSource.close();
@@ -118,6 +137,27 @@ export function createApp(doc = document) {
     }
   }
 
+  function setAuxMasterLevel(level: number, options: { skipLiveSend?: boolean } = {}) {
+    const nextLevel = clampLevel(level);
+    state.auxMasterLevel = nextLevel;
+
+    const strip = refs.faderArea.querySelector('.fader-strip[data-kind="master"]');
+    if (!strip) return;
+
+    const pct = nextLevel * 100;
+    const fill = strip.querySelector('.fader-fill') as HTMLElement;
+    const thumb = strip.querySelector('.fader-thumb') as HTMLElement;
+    const db = strip.querySelector('.fader-db') as HTMLElement;
+
+    fill.style.height = `${pct}%`;
+    thumb.style.bottom = `${pct}%`;
+    db.textContent = levelToDb(nextLevel);
+
+    if (!options.skipLiveSend) {
+      sendLiveAuxMasterLevel(nextLevel);
+    }
+  }
+
   function toggleMute(channel: number) {
     if (state.mutedChannels.has(channel)) state.mutedChannels.delete(channel);
     else state.mutedChannels.add(channel);
@@ -127,14 +167,16 @@ export function createApp(doc = document) {
   function onFaderTouchStart(event: TouchEvent) {
     event.preventDefault();
     const track = event.currentTarget as HTMLElement;
-    const channel = Number.parseInt(track.dataset.ch, 10);
+    const channel = Number.parseInt(track.dataset.ch || '', 10);
+    const kind = track.dataset.kind;
     const rect = track.getBoundingClientRect();
 
     for (const touch of Array.from(event.changedTouches)) {
       const y = touch.clientY - rect.top;
       const level = 1 - (y / rect.height);
-      state.activeTouches[touch.identifier] = { channel, trackRect: rect };
-      setFaderLevel(channel, level);
+      state.activeTouches[touch.identifier] = { channel, kind, trackRect: rect };
+      if (kind === 'master') setAuxMasterLevel(level);
+      else setFaderLevel(channel, level);
     }
   }
 
@@ -145,7 +187,8 @@ export function createApp(doc = document) {
       if (!info) continue;
       const y = touch.clientY - info.trackRect.top;
       const level = 1 - (y / info.trackRect.height);
-      setFaderLevel(info.channel, level);
+      if (info.kind === 'master') setAuxMasterLevel(level);
+      else setFaderLevel(info.channel, level);
     }
   }
 
@@ -157,13 +200,15 @@ export function createApp(doc = document) {
 
   function onFaderMouseDown(event: MouseEvent) {
     const track = event.currentTarget as HTMLElement;
-    const channel = Number.parseInt(track.dataset.ch, 10);
+    const channel = Number.parseInt(track.dataset.ch || '', 10);
+    const kind = track.dataset.kind;
     const rect = track.getBoundingClientRect();
 
     const onMove = (moveEvent: MouseEvent) => {
       const y = moveEvent.clientY - rect.top;
       const level = 1 - (y / rect.height);
-      setFaderLevel(channel, level);
+      if (kind === 'master') setAuxMasterLevel(level);
+      else setFaderLevel(channel, level);
     };
 
     const onUp = () => {
@@ -175,7 +220,9 @@ export function createApp(doc = document) {
     doc.addEventListener('mouseup', onUp);
 
     const y = event.clientY - rect.top;
-    setFaderLevel(channel, 1 - (y / rect.height));
+    const level = 1 - (y / rect.height);
+    if (kind === 'master') setAuxMasterLevel(level);
+    else setFaderLevel(channel, level);
   }
 
   async function handleLogin(profileId: number) {
@@ -186,6 +233,7 @@ export function createApp(doc = document) {
       if (!profile) return;
 
       let liveLevels = {};
+      let liveAuxMasterLevel = 0.7;
       if ((data.allowedChannels || []).length) {
         try {
           const liveResponse = await api.getAuxSendLevels(profile.auxBus, data.allowedChannels);
@@ -195,12 +243,22 @@ export function createApp(doc = document) {
         }
       }
 
+      try {
+        const auxMasterResponse = await api.getAuxMasterLevel(profile.auxBus);
+        if (Number.isFinite(Number(auxMasterResponse?.level))) {
+          liveAuxMasterLevel = Number(auxMasterResponse.level);
+        }
+      } catch (error) {
+        console.error('Failed to load aux master level:', error);
+      }
+
       state.channels = channels;
       applyLoginState(state, {
         profile,
         allowedChannels: data.allowedChannels || [],
         savedMixes: Array.isArray(data.savedMixes) ? data.savedMixes : [],
         liveLevels,
+        liveAuxMasterLevel,
       });
 
       dom.showMixerScreen(refs);
@@ -302,6 +360,16 @@ export function createApp(doc = document) {
     state.faderSendTimers[channel] = setTimeout(() => {
       api.setFaderLevel(state.currentProfile.id, channel, level)
         .catch((error) => console.error('Live level send failed:', error));
+    }, 25);
+  }
+
+  function sendLiveAuxMasterLevel(level: number) {
+    if (!state.currentProfile) return;
+
+    clearTimeout(state.faderSendTimers['master'] as ReturnType<typeof setTimeout> | undefined);
+    state.faderSendTimers['master'] = setTimeout(() => {
+      api.setAuxMasterLevel(state.currentProfile.id, state.currentProfile.auxBus, level)
+        .catch((error) => console.error('Live aux master send failed:', error));
     }, 25);
   }
 

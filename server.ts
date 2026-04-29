@@ -29,8 +29,10 @@ let dliveProvider: any = {
   }),
   resync: async () => ({ success: false, error: 'dLive not configured' }),
   getAuxSendLevels: async () => ({ success: false, error: 'dLive not configured', levels: {} }),
+  getAuxMasterLevel: async () => ({ success: false, error: 'dLive not configured' }),
   applyAuxSendLevels: async () => ({ success: false, error: 'dLive not configured' }),
   setAuxSendLevel: () => false,
+  setAuxMasterLevel: () => false,
 };
 
 // Simple JSON file storage for profiles
@@ -290,6 +292,28 @@ function broadcastAuxSendLevel(payload) {
     type: 'aux-send-level',
     auxBus: normalizedAuxBus,
     inputChannel: normalizedInputChannel,
+    level: normalizedLevel,
+  })}\n\n`;
+
+  eventStreams.forEach((stream) => {
+    try {
+      stream.write(message);
+    } catch (error) {
+      eventStreams.delete(stream);
+    }
+  });
+}
+
+function broadcastAuxMasterLevel(payload) {
+  const normalizedAuxBus = Number(payload?.auxBus);
+  const normalizedLevel = Number(payload?.level);
+  if (!Number.isInteger(normalizedAuxBus) || !Number.isFinite(normalizedLevel)) {
+    return;
+  }
+
+  const message = `event: aux-master-level\ndata: ${JSON.stringify({
+    type: 'aux-master-level',
+    auxBus: normalizedAuxBus,
     level: normalizedLevel,
   })}\n\n`;
 
@@ -583,6 +607,68 @@ function startServer(port = 3000) {
   app.post('/api/aux-send-level', handleAuxSendLevel);
   app.post('/api/fader-level', handleAuxSendLevel);
 
+  app.post('/api/dlive/aux-master-level', async (req, res) => {
+    const normalizedAuxBus = Number(req.body?.auxBus);
+    if (!Number.isInteger(normalizedAuxBus) || normalizedAuxBus <= 0) {
+      return res.status(400).json({ error: 'Aux bus is required' });
+    }
+
+    const status = dliveProvider.getStatus();
+    if (!status.connected) {
+      return res.status(503).json({ success: false, error: 'dLive not connected' });
+    }
+
+    try {
+      const result = await dliveProvider.getAuxMasterLevel(normalizedAuxBus);
+      if (result?.success === false) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error) {
+      res.status(502).json({
+        success: false,
+        error: 'Failed to fetch aux master level',
+      });
+    }
+  });
+
+  app.post('/api/aux-master-level', (req, res) => {
+    const { slotId, profileId, auxBus, level } = req.body || {};
+    const profiles = loadProfiles();
+    const slot = resolveSlot(profiles, slotId ?? profileId);
+    const resolvedAuxBus = auxBus != null ? Number(auxBus) : slot?.auxBus;
+    const normalizedLevel = Number(level);
+
+    if (!Number.isInteger(resolvedAuxBus) || resolvedAuxBus <= 0) {
+      return res.status(400).json({ error: 'Aux bus is required' });
+    }
+
+    if (!Number.isFinite(normalizedLevel) || normalizedLevel < 0 || normalizedLevel > 1) {
+      return res.status(400).json({ error: 'Level must be between 0 and 1' });
+    }
+
+    const status = dliveProvider.getStatus();
+    if (!status.connected) {
+      return res.status(503).json({ success: false, error: 'dLive not connected' });
+    }
+
+    const sendApplied = dliveProvider.setAuxMasterLevel(resolvedAuxBus, normalizedLevel);
+    if (sendApplied === false) {
+      return res.status(502).json({
+        success: false,
+        error: 'Failed to apply aux master level',
+      });
+    }
+
+    res.json({
+      success: true,
+      slotId: slot?.id || null,
+      auxBus: resolvedAuxBus,
+      level: normalizedLevel,
+    });
+  });
+
   app.post('/api/recall-mix', async (req, res) => {
     const { slotId, profileId, mixId } = req.body || {};
     const profiles = loadProfiles();
@@ -694,6 +780,7 @@ module.exports = {
   getServerState,
   setDLiveProvider,
   broadcastAuxSendLevel,
+  broadcastAuxMasterLevel,
   loadSettings,
   saveSettings,
   getDefaultSettings,

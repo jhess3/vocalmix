@@ -44,6 +44,13 @@ export function getAuxSendLevels(auxBus: number, inputChannels: number[]) {
   });
 }
 
+export function getAuxMasterLevel(auxBus: number) {
+  return fetchJSON('/api/dlive/aux-master-level', {
+    method: 'POST',
+    body: JSON.stringify({ auxBus }),
+  });
+}
+
 export function getSavedMixes() {
   return fetchJSON('/api/saved-mixes');
 }
@@ -73,5 +80,12 @@ export function setFaderLevel(slotId: number, inputChannel: number, level: numbe
   return fetchJSON('/api/fader-level', {
     method: 'POST',
     body: JSON.stringify({ slotId, inputChannel, level }),
+  });
+}
+
+export function setAuxMasterLevel(slotId: number, auxBus: number, level: number) {
+  return fetchJSON('/api/aux-master-level', {
+    method: 'POST',
+    body: JSON.stringify({ slotId, auxBus, level }),
   });
 }

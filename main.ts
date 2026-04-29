@@ -1,6 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } = require('electron');
 const path = require('path');
-const { startServer, stopServer, getServerState, setDLiveProvider, broadcastAuxSendLevel, loadSettings } = require('./server');
+const { startServer, stopServer, getServerState, setDLiveProvider, broadcastAuxSendLevel, broadcastAuxMasterLevel, loadSettings } = require('./server');
 const { DLiveConnection } = require('./dlive');
 const { createDLiveProvider } = require('./dlive-provider');
 
@@ -152,6 +152,9 @@ app.whenReady().then(async () => {
   dlive = new DLiveConnection();
   dlive.on('aux-send-level', (payload) => {
     broadcastAuxSendLevel(payload);
+  });
+  dlive.on('aux-master-level', (payload) => {
+    broadcastAuxMasterLevel(payload);
   });
   setDLiveProvider(createDLiveProvider(dlive));
 

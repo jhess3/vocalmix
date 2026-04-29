@@ -16,6 +16,7 @@ test('createInitialState starts with normalized client defaults', async () => {
     currentProfile: null,
     allowedChannels: [],
     faderLevels: {},
+    auxMasterLevel: 0.7,
     mutedChannels: new Set(),
     activeTouches: {},
     savedMixes: [],
@@ -38,6 +39,7 @@ test('applyLoginState hydrates the logged-in profile and live levels into one st
     allowedChannels: [3, 5],
     savedMixes: [{ id: 'mix-1', name: 'Sunday AM' }],
     liveLevels: { 3: 0.25 },
+    liveAuxMasterLevel: 0.55,
   });
 
   assert.equal(state.currentProfile.id, 2);
@@ -45,6 +47,7 @@ test('applyLoginState hydrates the logged-in profile and live levels into one st
   assert.deepEqual(state.savedMixes, [{ id: 'mix-1', name: 'Sunday AM' }]);
   assert.equal(state.currentLoadedMixId, null);
   assert.equal(state.currentLoadedMixName, '');
+  assert.equal(state.auxMasterLevel, 0.55);
   assert.deepEqual(state.faderLevels, { 3: 0.25, 5: 0.7 });
   assert.deepEqual([...state.mutedChannels], []);
 });

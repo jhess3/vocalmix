@@ -3,6 +3,7 @@ export function createInitialState() {
     currentProfile: null,
     allowedChannels: [],
     faderLevels: {},
+    auxMasterLevel: 0.7,
     mutedChannels: new Set(),
     activeTouches: {},
     savedMixes: [],
@@ -20,6 +21,7 @@ export function resetSessionState(state) {
   state.currentProfile = null;
   state.allowedChannels = [];
   state.faderLevels = {};
+  state.auxMasterLevel = 0.7;
   state.mutedChannels = new Set();
   state.activeTouches = {};
   state.savedMixes = [];
@@ -33,10 +35,11 @@ export function applyBootstrapData(state, { profiles, channels, auxBuses }) {
   state.auxBuses = Array.isArray(auxBuses) ? auxBuses : [];
 }
 
-export function applyLoginState(state, { profile, allowedChannels, savedMixes, liveLevels }) {
+export function applyLoginState(state, { profile, allowedChannels, savedMixes, liveLevels, liveAuxMasterLevel }) {
   state.currentProfile = profile || null;
   state.allowedChannels = Array.isArray(allowedChannels) ? [...allowedChannels] : [];
   state.faderLevels = {};
+  state.auxMasterLevel = Number.isFinite(Number(liveAuxMasterLevel)) ? Number(liveAuxMasterLevel) : 0.7;
   state.mutedChannels = new Set();
   state.savedMixes = Array.isArray(savedMixes) ? [...savedMixes] : [];
   state.currentLoadedMixId = null;

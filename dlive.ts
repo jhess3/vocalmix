@@ -34,6 +34,7 @@ const MAX_STEREO_AUX_COUNT = 31;
 const SYSEX_HEADER = [0xF0, 0x00, 0x00, 0x1A, 0x50, 0x10, 0x01, 0x00];
 const DEFAULT_CHANNEL_COLOR = '#5F6B7A';
 const DEFAULT_AUX_COLOR = '#8B8B8B';
+const NRPN_PARAMETER_FADER_LEVEL = 0x17;
 
 class DLiveConnection extends EventEmitter {
   constructor() {
@@ -48,6 +49,9 @@ class DLiveConnection extends EventEmitter {
     this._receivedChannelNames = new Map();
     this._receivedAuxNames = new Map();
     this._pendingSendLevelRequests = new Map();
+    this._pendingAuxMasterLevelRequests = new Map();
+    this._midiRunningStatus = null;
+    this._pendingNrpnByMidiChannel = new Map();
   }
 
   isConnected() {
@@ -147,6 +151,24 @@ class DLiveConnection extends EventEmitter {
     });
 
     return { success: true, auxBus: normalizedAuxBus, levels: normalizedLevels };
+  }
+
+  async getAuxMasterLevel(auxBus) {
+    if (!this._connected || !this._socket) {
+      return { success: false, error: 'Not connected' };
+    }
+
+    const target = this._getAuxTarget(auxBus);
+    if (!target) {
+      return { success: false, error: `Unsupported aux bus: ${auxBus}` };
+    }
+
+    const normalizedAuxBus = this._getAuxBusFromTarget(target.sndN, target.sndCH);
+    const promise = this._createPendingAuxMasterLevelRequest(normalizedAuxBus);
+    this._socket.write(this._buildGetFaderLevelMessage(target));
+
+    const level = await promise;
+    return { success: true, auxBus: normalizedAuxBus, level };
   }
 
   /**
@@ -274,6 +296,18 @@ class DLiveConnection extends EventEmitter {
     ]);
   }
 
+  _buildGetFaderLevelMessage(target) {
+    return Buffer.from([
+      ...SYSEX_HEADER,
+      target.sndN & 0x0F,
+      0x05,
+      0x0B,
+      NRPN_PARAMETER_FADER_LEVEL,
+      target.sndCH & 0x7F,
+      0xF7,
+    ]);
+  }
+
   _createPendingSendLevelRequest(inputCh, auxBus) {
     const key = `${auxBus}:${inputCh}`;
     const existing = this._pendingSendLevelRequests.get(key);
@@ -290,6 +324,29 @@ class DLiveConnection extends EventEmitter {
       }, 1500);
 
       this._pendingSendLevelRequests.set(key, {
+        resolve,
+        reject,
+        timeoutId,
+      });
+    });
+  }
+
+  _createPendingAuxMasterLevelRequest(auxBus) {
+    const key = String(auxBus);
+    const existing = this._pendingAuxMasterLevelRequests.get(key);
+    if (existing) {
+      clearTimeout(existing.timeoutId);
+      existing.reject(new Error('Superseded by newer aux master level request'));
+      this._pendingAuxMasterLevelRequests.delete(key);
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        this._pendingAuxMasterLevelRequests.delete(key);
+        reject(new Error(`Timed out waiting for aux master level ${key}`));
+      }, 1500);
+
+      this._pendingAuxMasterLevelRequests.set(key, {
         resolve,
         reject,
         timeoutId,
@@ -357,24 +414,83 @@ class DLiveConnection extends EventEmitter {
    */
   _parseMessages() {
     while (this._buffer.length > 0) {
-      const start = this._buffer.indexOf(0xF0);
-      if (start === -1) {
-        this._buffer = Buffer.alloc(0);
+      const firstByte = this._buffer[0];
+      if (firstByte === 0xF0) {
+        const end = this._buffer.indexOf(0xF7, 1);
+        if (end === -1) {
+          return;
+        }
+
+        const message = this._buffer.slice(0, end + 1);
+        this._buffer = this._buffer.slice(end + 1);
+        this._parseSysExMessage(message);
+        continue;
+      }
+
+      const statusByte = firstByte >= 0x80 ? firstByte : this._midiRunningStatus;
+      if ((statusByte & 0xF0) !== 0xB0) {
+        this._buffer = this._buffer.slice(1);
+        continue;
+      }
+
+      const hasStatusByte = firstByte >= 0x80;
+      if (this._buffer.length < (hasStatusByte ? 3 : 2)) {
         return;
       }
 
-      if (start > 0) {
-        this._buffer = this._buffer.slice(start);
+      const controller = this._buffer[hasStatusByte ? 1 : 0];
+      const value = this._buffer[hasStatusByte ? 2 : 1];
+      this._midiRunningStatus = statusByte;
+      this._buffer = this._buffer.slice(hasStatusByte ? 3 : 2);
+      this._parseMidiMessage(Buffer.from([statusByte, controller, value]));
+    }
+  }
+
+  _parseMidiMessage(message) {
+    for (let offset = 0; offset + 2 < message.length; offset += 3) {
+      const status = message[offset];
+      if ((status & 0xF0) !== 0xB0) continue;
+
+      const midiChannel = status & 0x0F;
+      const controller = message[offset + 1] & 0x7F;
+      const value = message[offset + 2] & 0x7F;
+      const pending = this._pendingNrpnByMidiChannel.get(midiChannel) || {
+        channel: null,
+        parameter: null,
+      };
+
+      if (controller === 0x63) {
+        pending.channel = value;
+        this._pendingNrpnByMidiChannel.set(midiChannel, pending);
+        continue;
       }
 
-      const end = this._buffer.indexOf(0xF7, 1);
-      if (end === -1) {
-        return;
+      if (controller === 0x62) {
+        pending.parameter = value;
+        this._pendingNrpnByMidiChannel.set(midiChannel, pending);
+        continue;
       }
 
-      const message = this._buffer.slice(0, end + 1);
-      this._buffer = this._buffer.slice(end + 1);
-      this._parseSysExMessage(message);
+      if (controller !== 0x06 || pending.parameter !== NRPN_PARAMETER_FADER_LEVEL) {
+        continue;
+      }
+
+      const auxBus = this._getAuxBusFromTarget(midiChannel, pending.channel);
+      if (!auxBus) continue;
+
+      const level = value / 127;
+      const requestKey = String(auxBus);
+      const pendingRequest = this._pendingAuxMasterLevelRequests.get(requestKey);
+      if (pendingRequest) {
+        clearTimeout(pendingRequest.timeoutId);
+        this._pendingAuxMasterLevelRequests.delete(requestKey);
+        pendingRequest.resolve(level);
+      }
+
+      this.emit('aux-master-level', {
+        auxBus,
+        level,
+      });
     }
   }
 
@@ -510,6 +626,36 @@ class DLiveConnection extends EventEmitter {
       return true;
     } catch (err) {
       console.error('[dLive] Failed to send:', err.message);
+      return false;
+    }
+  }
+
+  setAuxMasterLevel(auxBus, level) {
+    if (!this._connected || !this._socket) return false;
+    const normalizedLevel = Number(level);
+    const target = this._getAuxTarget(auxBus);
+    if (!target || !Number.isFinite(normalizedLevel)) {
+      return false;
+    }
+
+    const faderLevel = Math.max(0, Math.min(127, Math.round(normalizedLevel * 127)));
+    const msg = Buffer.from([
+      0xB0 | (target.sndN & 0x0F),
+      0x63,
+      target.sndCH & 0x7F,
+      0xB0 | (target.sndN & 0x0F),
+      0x62,
+      NRPN_PARAMETER_FADER_LEVEL,
+      0xB0 | (target.sndN & 0x0F),
+      0x06,
+      faderLevel & 0x7F,
+    ]);
+
+    try {
+      this._socket.write(msg);
+      return true;
+    } catch (err) {
+      console.error('[dLive] Failed to send aux master:', err.message);
       return false;
     }
   }

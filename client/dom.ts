@@ -64,17 +64,47 @@ export function showMixerScreen(refs) {
 
 export function renderFaders(refs, state, { levelToDb }) {
   const visibleChannels = state.channels.filter((channel) => state.allowedChannels.includes(channel.ch));
-  refs.mixerStats.textContent = `${visibleChannels.length} channels`;
+  refs.mixerStats.textContent = `${visibleChannels.length} channels + master`;
   refs.mixerHint.textContent = visibleChannels.length > 10
     ? 'Swipe sideways for the full mix'
     : 'Drag faders to shape the mix';
 
+  const currentAux = state.auxBuses.find((item) => item.id === state.currentProfile?.auxBus);
+  const masterSubLabel = currentAux?.name || 'BUS';
+
   if (!visibleChannels.length) {
-    refs.faderArea.innerHTML = '<div class="fader-empty">No live dLive channel names are available for this profile.</div>';
+    const masterPct = (state.auxMasterLevel || 0) * 100;
+    refs.faderArea.innerHTML = `
+      <div class="fader-strip fader-strip-master" data-kind="master">
+        <div class="fader-label">Aux Master</div>
+        <div class="fader-ch">${masterSubLabel}</div>
+        <div class="fader-track" data-kind="master">
+          <div class="fader-fill" style="height:${masterPct}%;background:linear-gradient(180deg,#ffd36a,#ff8a3d);opacity:0.55"></div>
+          <div class="fader-thumb" style="bottom:${masterPct}%" data-kind="master"></div>
+        </div>
+        <div class="fader-db">${levelToDb(state.auxMasterLevel || 0)}</div>
+        <div class="fader-spacer"></div>
+      </div>
+      <div class="fader-empty">No live dLive channel names are available for this profile.</div>
+    `;
     return;
   }
 
-  refs.faderArea.innerHTML = visibleChannels.map((channel) => {
+  const masterPct = (state.auxMasterLevel || 0) * 100;
+  const masterStrip = `
+    <div class="fader-strip fader-strip-master" data-kind="master">
+      <div class="fader-label">Aux Master</div>
+      <div class="fader-ch">${masterSubLabel}</div>
+      <div class="fader-track" data-kind="master">
+        <div class="fader-fill" style="height:${masterPct}%;background:linear-gradient(180deg,#ffd36a,#ff8a3d);opacity:0.55"></div>
+        <div class="fader-thumb" style="bottom:${masterPct}%" data-kind="master"></div>
+      </div>
+      <div class="fader-db">${levelToDb(state.auxMasterLevel || 0)}</div>
+      <div class="fader-spacer"></div>
+    </div>
+  `;
+
+  refs.faderArea.innerHTML = masterStrip + visibleChannels.map((channel) => {
     const level = state.faderLevels[channel.ch] || 0;
     const muted = state.mutedChannels.has(channel.ch);
     const pct = level * 100;
